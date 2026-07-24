@@ -11,6 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   paceMpsToPerKm,
+  parseGoalText,
   vdotFromFitness,
   zonePaceMps,
   type FitnessInput,
@@ -74,6 +75,32 @@ export default function Onboarding() {
   const [distance, setDistance] = useState<RaceDistance | null>(null);
   const [weeks, setWeeks] = useState<number | null>(null);
   const [days, setDays] = useState<number | null>(null);
+  const [targetTimeSeconds, setTargetTimeSeconds] = useState<number | null>(null);
+
+  const [quickText, setQuickText] = useState('');
+  const [quickHint, setQuickHint] = useState<string | null>(null);
+
+  function applyQuick() {
+    const parsed = parseGoalText(quickText);
+    const found: string[] = [];
+    if (parsed.distance) {
+      setDistance(parsed.distance);
+      found.push('Distanz');
+    }
+    if (parsed.weeks) {
+      setWeeks(parsed.weeks);
+      found.push('Zeitrahmen');
+    }
+    if (parsed.daysPerWeek) {
+      setDays(parsed.daysPerWeek);
+      found.push('Trainingstage');
+    }
+    if (parsed.targetTimeSeconds) {
+      setTargetTimeSeconds(parsed.targetTimeSeconds);
+      found.push('Zielzeit');
+    }
+    setQuickHint(found.length ? `Erkannt: ${found.join(', ')}.` : 'Nichts erkannt – wähle unten manuell.');
+  }
 
   const [fitnessMode, setFitnessMode] = useState<FitnessMode>('race');
   const [raceMeters, setRaceMeters] = useState<number>(5000);
@@ -103,7 +130,7 @@ export default function Onboarding() {
 
   function finish() {
     if (!distance || !weeks || !days || !fitness) return;
-    const goal: Goal = { distance, weeks };
+    const goal: Goal = { distance, weeks, ...(targetTimeSeconds ? { targetTimeSeconds } : {}) };
     createProfile({ goal, fitness, daysPerWeek: days });
     router.replace('/');
   }
@@ -139,6 +166,25 @@ export default function Onboarding() {
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         {step === 0 && (
           <>
+            <View style={[styles.quickCard, { backgroundColor: p.card, borderColor: p.border }]}>
+              <Text style={[styles.subLabel, { color: p.subtext }]}>Ziel in einem Satz (optional)</Text>
+              <TextInput
+                value={quickText}
+                onChangeText={setQuickText}
+                placeholder="z. B. 10k unter 45 min in 12 Wochen, 4x pro Woche"
+                placeholderTextColor={p.subtext}
+                style={[styles.quickInput, { color: p.text, borderColor: p.border }]}
+                multiline
+              />
+              <Pressable
+                onPress={applyQuick}
+                style={[styles.quickBtn, { borderColor: p.accent }]}
+              >
+                <Text style={[styles.quickBtnText, { color: p.accent }]}>Übernehmen</Text>
+              </Pressable>
+              {quickHint && <Text style={[styles.quickHintText, { color: p.subtext }]}>{quickHint}</Text>}
+            </View>
+
             <Text style={[styles.q, { color: p.text }]}>Welche Distanz ist dein Ziel?</Text>
             <View style={styles.chipWrap}>
               {DISTANCES.map((d) => (
@@ -267,6 +313,11 @@ const styles = StyleSheet.create({
   scroll: { padding: 24, gap: 18 },
   q: { fontSize: 23, fontWeight: '700', lineHeight: 30 },
   subLabel: { fontSize: 13, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.4 },
+  quickCard: { borderRadius: 14, borderWidth: 1, padding: 14, gap: 10 },
+  quickInput: { borderWidth: 1, borderRadius: 10, padding: 12, fontSize: 15, minHeight: 64, textAlignVertical: 'top' },
+  quickBtn: { borderWidth: 1.5, borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
+  quickBtnText: { fontSize: 15, fontWeight: '700' },
+  quickHintText: { fontSize: 13 },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   chip: { borderRadius: 12, borderWidth: 1, paddingVertical: 12, paddingHorizontal: 16 },
   chipText: { fontSize: 15, fontWeight: '600' },

@@ -21,5 +21,8 @@ export * from './planner/generatePlan';
 // Aktivitäts-Auswertung & Adaption (framework-agnostisch, kein FIT-SDK)
 export * from './adaptation/adapt';
 
+// Natürlichsprachliche Zieleingabe (regelbasiert)
+export * from './nlp/parseGoal';
+
 // Utilities
 export * from './util/pace';
