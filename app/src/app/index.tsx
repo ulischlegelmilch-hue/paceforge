@@ -96,6 +96,16 @@ export default function HomeScreen() {
           ))}
         </View>
 
+        <Pressable
+          onPress={() => router.push('/plan')}
+          style={({ pressed }) => [
+            styles.planCta,
+            { backgroundColor: p.accent, opacity: pressed ? 0.85 : 1 },
+          ]}
+        >
+          <Text style={[styles.ctaText, { color: p.accentText }]}>Trainingsplan ansehen</Text>
+        </Pressable>
+
         <Pressable onPress={reset} style={styles.resetBtn}>
           <Text style={[styles.resetText, { color: p.subtext }]}>Angaben zurücksetzen</Text>
         </Pressable>
@@ -111,6 +121,7 @@ const styles = StyleSheet.create({
   lead: { fontSize: 26, fontWeight: '700', marginTop: 8 },
   leadSub: { fontSize: 15, lineHeight: 22, marginTop: 4 },
   cta: { marginTop: 24, borderRadius: 14, paddingVertical: 16, alignItems: 'center' },
+  planCta: { marginTop: 4, borderRadius: 14, paddingVertical: 16, alignItems: 'center' },
   ctaText: { fontSize: 17, fontWeight: '700' },
   scroll: { padding: 20, gap: 16 },
   card: { borderRadius: 16, borderWidth: 1, padding: 18 },

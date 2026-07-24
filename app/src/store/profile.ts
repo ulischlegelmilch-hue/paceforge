@@ -1,14 +1,16 @@
 import { create } from 'zustand';
 import {
+  generatePlan,
   vdotFromFitness,
   type AthleteProfile,
   type FitnessInput,
   type Goal,
+  type TrainingPlan,
 } from '@paceforge/core';
 
-// In-Memory-Profilstore (MVP). Persistenz via expo-sqlite ist als Folgeschritt
-// vorgesehen; die Erstellung des AthleteProfile inkl. VDOT-Ableitung liegt aber
-// schon vollständig in @paceforge/core und ist damit unit-getestet.
+// In-Memory-Store für Profil + generierten Trainingsplan (MVP). Persistenz via
+// expo-sqlite ist als Folgeschritt vorgesehen. Profil-Erstellung + Plan-Generierung
+// liegen vollständig in @paceforge/core und sind dort unit-getestet.
 
 interface CreateProfileInput {
   goal: Goal;
@@ -19,12 +21,14 @@ interface CreateProfileInput {
 
 interface ProfileState {
   profile: AthleteProfile | null;
+  plan: TrainingPlan | null;
   createProfile: (input: CreateProfileInput) => AthleteProfile;
   reset: () => void;
 }
 
 export const useProfileStore = create<ProfileState>((set) => ({
   profile: null,
+  plan: null,
   createProfile: ({ goal, fitness, daysPerWeek, longRunDay }) => {
     const profile: AthleteProfile = {
       id: `athlete-${Date.now()}`,
@@ -36,8 +40,9 @@ export const useProfileStore = create<ProfileState>((set) => ({
       longRunDay,
       units: 'metric',
     };
-    set({ profile });
+    const plan = generatePlan(profile);
+    set({ profile, plan });
     return profile;
   },
-  reset: () => set({ profile: null }),
+  reset: () => set({ profile: null, plan: null }),
 }));
