@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Expo / RN (später)
+app/.expo/
+app/web-build/
+app/android/
+app/ios/
+
+# Logs & OS
+*.log
+.DS_Store
+
+# Env / Secrets
+.env
+.env.*
+!.env.example
+
+# Generierte/ exportierte FIT-Dateien (Testartefakte)
+*.fit

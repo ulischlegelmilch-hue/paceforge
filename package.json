@@ -1,0 +1,16 @@
+{
+  "name": "paceforge",
+  "version": "0.0.1",
+  "private": true,
+  "description": "PaceForge – adaptiver Lauf-Trainingsplan mit Garmin-Sync (Monorepo)",
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "npm run test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  }
+}
