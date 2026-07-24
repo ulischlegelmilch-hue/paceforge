@@ -18,4 +18,7 @@ config.resolver.nodeModulesPaths = [
   path.resolve(workspaceRoot, 'node_modules'),
 ];
 
+// 3) package.json "exports" beachten, damit @paceforge/core/fit aufgeloest wird.
+config.resolver.unstable_enablePackageExports = true;
+
 module.exports = config;

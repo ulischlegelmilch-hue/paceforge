@@ -11,6 +11,9 @@
       ],
       "@paceforge/core": [
         "../packages/core/src/index.ts"
+      ],
+      "@paceforge/core/fit": [
+        "../packages/core/src/fit/index.ts"
       ]
     }
   },

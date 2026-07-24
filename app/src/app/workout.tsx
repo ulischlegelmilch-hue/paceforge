@@ -1,7 +1,10 @@
+import { useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { isRepeatBlock, type WorkoutStep } from '@paceforge/core';
+
+import { fitFileProvider } from '@/delivery/FitFileProvider';
 
 import { usePalette, type Palette } from '@/ui/colors';
 import {
@@ -50,6 +53,22 @@ export default function WorkoutScreen() {
 
   const { workout } = scheduled;
   const date = new Date(scheduled.date);
+  const [exporting, setExporting] = useState(false);
+  const instructions = fitFileProvider.getDeliveryInstructions();
+
+  async function onExport() {
+    try {
+      setExporting(true);
+      const result = await fitFileProvider.exportWorkout(workout);
+      if (!(await fitFileProvider.isAvailable())) {
+        Alert.alert('FIT-Datei erstellt', `Gespeichert als ${result.fileName} (${result.bytes} Bytes).`);
+      }
+    } catch (e) {
+      Alert.alert('Export fehlgeschlagen', e instanceof Error ? e.message : 'Unbekannter Fehler.');
+    } finally {
+      setExporting(false);
+    }
+  }
 
   return (
     <SafeAreaView style={[styles.fill, { backgroundColor: p.bg }]}>
@@ -101,6 +120,35 @@ export default function WorkoutScreen() {
             })}
           </View>
         )}
+
+        {workout.elements.length > 0 && (
+          <View style={{ marginTop: 20, gap: 12 }}>
+            <Pressable
+              onPress={onExport}
+              disabled={exporting}
+              style={({ pressed }) => [
+                styles.exportBtn,
+                { backgroundColor: p.accent, opacity: pressed || exporting ? 0.7 : 1 },
+              ]}
+            >
+              {exporting ? (
+                <ActivityIndicator color={p.accentText} />
+              ) : (
+                <Text style={[styles.exportText, { color: p.accentText }]}>Auf Garmin-Uhr exportieren</Text>
+              )}
+            </Pressable>
+
+            <View style={[styles.instructions, { backgroundColor: p.card, borderColor: p.border }]}>
+              <Text style={[styles.instrTitle, { color: p.text }]}>{instructions.title}</Text>
+              {instructions.steps.map((s, i) => (
+                <View key={i} style={styles.instrRow}>
+                  <Text style={[styles.instrNum, { color: p.accent }]}>{i + 1}.</Text>
+                  <Text style={[styles.instrText, { color: p.subtext }]}>{s}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -124,4 +172,11 @@ const styles = StyleSheet.create({
   stepTarget: { fontSize: 14, marginTop: 2, fontVariant: ['tabular-nums'] },
   restText: { fontSize: 16, lineHeight: 24, marginTop: 16 },
   empty: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  exportBtn: { borderRadius: 14, paddingVertical: 16, alignItems: 'center', minHeight: 54, justifyContent: 'center' },
+  exportText: { fontSize: 17, fontWeight: '700' },
+  instructions: { borderRadius: 14, borderWidth: 1, padding: 16, gap: 8 },
+  instrTitle: { fontSize: 15, fontWeight: '700', marginBottom: 2 },
+  instrRow: { flexDirection: 'row', gap: 8 },
+  instrNum: { fontSize: 14, fontWeight: '700', width: 20 },
+  instrText: { flex: 1, fontSize: 14, lineHeight: 20 },
 });
