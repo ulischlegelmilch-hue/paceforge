@@ -11,7 +11,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   paceMpsToPerKm,
-  parseGoalText,
   vdotFromFitness,
   zonePaceMps,
   type FitnessInput,
@@ -22,6 +21,7 @@ import {
 
 import { usePalette, type Palette } from '@/ui/colors';
 import { useProfileStore } from '@/store/profile';
+import { parseGoalSmart } from '@/api/parseGoal';
 
 // ---- kleine wiederverwendbare Chip-Auswahl ----------------------------------
 function Chip({
@@ -80,8 +80,10 @@ export default function Onboarding() {
   const [quickText, setQuickText] = useState('');
   const [quickHint, setQuickHint] = useState<string | null>(null);
 
-  function applyQuick() {
-    const parsed = parseGoalText(quickText);
+  async function applyQuick() {
+    if (!quickText.trim()) return;
+    setQuickHint('… wird analysiert');
+    const { parsed, source } = await parseGoalSmart(quickText);
     const found: string[] = [];
     if (parsed.distance) {
       setDistance(parsed.distance);
@@ -99,7 +101,10 @@ export default function Onboarding() {
       setTargetTimeSeconds(parsed.targetTimeSeconds);
       found.push('Zielzeit');
     }
-    setQuickHint(found.length ? `Erkannt: ${found.join(', ')}.` : 'Nichts erkannt – wähle unten manuell.');
+    const via = source === 'llm' ? ' (per KI)' : '';
+    setQuickHint(
+      found.length ? `Erkannt: ${found.join(', ')}${via}.` : 'Nichts erkannt – wähle unten manuell.',
+    );
   }
 
   const [fitnessMode, setFitnessMode] = useState<FitnessMode>('race');
