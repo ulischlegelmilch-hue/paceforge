@@ -4,11 +4,14 @@ import type { CompletedActivity } from '../src/domain/activity';
 import { generatePlan } from '../src/planner/generatePlan';
 import { makeEasyRun } from '../src/planner/workouts';
 import {
+  applyAdaptation,
   applyVdotAdaptation,
   compareWorkout,
   matchActivity,
+  reduceUpcomingWeek,
   suggestAdaptation,
 } from '../src/adaptation/adapt';
+import type { AdaptationResult } from '../src/adaptation/adapt';
 
 const FIXED_START = new Date(2026, 0, 5); // Montag
 
@@ -88,6 +91,54 @@ describe('suggestAdaptation', () => {
     expect(res.recommendedVdotDelta).toBe(0);
     expect(res.reduceNextWeekVolume).toBe(false);
     expect(res.notes[0]).toMatch(/keine Anpassung/i);
+  });
+});
+
+describe('reduceUpcomingWeek', () => {
+  it('reduziert das Volumen der ersten nicht vergangenen Woche', () => {
+    const plan = generatePlan(profile(), { startDate: FIXED_START });
+    // Referenzdatum in Woche 1 (Plan startet So 4.1., Woche 0 endet Sa 10.1.)
+    const reduced = reduceUpcomingWeek(plan, new Date(2026, 0, 12));
+    // Nur Woche 1 wird reduziert; Nachbarwochen bleiben unverändert.
+    expect(reduced.weeks[1]!.targetWeeklyDistanceMeters).toBeLessThan(plan.weeks[1]!.targetWeeklyDistanceMeters);
+    expect(reduced.weeks[0]!.targetWeeklyDistanceMeters).toBe(plan.weeks[0]!.targetWeeklyDistanceMeters);
+    expect(reduced.weeks[2]!.targetWeeklyDistanceMeters).toBe(plan.weeks[2]!.targetWeeklyDistanceMeters);
+  });
+});
+
+describe('applyAdaptation', () => {
+  const base = profile();
+  const plan = generatePlan(base, { startDate: FIXED_START });
+
+  it('erhöht die VDOT und generiert den Plan mit gleichem Startdatum neu', () => {
+    const result: AdaptationResult = {
+      recommendedVdotDelta: 1,
+      reduceNextWeekVolume: false,
+      consecutiveMissed: 0,
+      assessments: [],
+      notes: [],
+    };
+    const out = applyAdaptation(base, plan, result, { referenceDate: new Date(2026, 0, 5) });
+    expect(out.profile.currentVdot).toBe(51);
+    // Startdatum bleibt erhalten
+    expect(out.plan.weeks[0]!.workouts[0]!.date).toBe(plan.weeks[0]!.workouts[0]!.date);
+    // schnellere Zonen -> Long Run gleicher Distanz, aber kürzere geschätzte Dauer
+    const longBefore = plan.weeks[0]!.workouts.find((w) => w.workout.kind === 'long')!.workout;
+    const longAfter = out.plan.weeks[0]!.workouts.find((w) => w.workout.kind === 'long')!.workout;
+    expect(longAfter.estimatedDurationSeconds!).toBeLessThan(longBefore.estimatedDurationSeconds!);
+  });
+
+  it('entlastet die kommende Woche, wenn empfohlen', () => {
+    const result: AdaptationResult = {
+      recommendedVdotDelta: 0,
+      reduceNextWeekVolume: true,
+      consecutiveMissed: 2,
+      assessments: [],
+      notes: [],
+    };
+    const out = applyAdaptation(base, plan, result, { referenceDate: new Date(2026, 0, 12) });
+    const reducedWeek = out.plan.weeks[1]!;
+    expect(reducedWeek.targetWeeklyDistanceMeters).toBeLessThan(plan.weeks[1]!.targetWeeklyDistanceMeters);
   });
 });
 

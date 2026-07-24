@@ -1,6 +1,7 @@
 import { create } from 'zustand';
+import { createJSONStorage, persist } from 'zustand/middleware';
 import {
-  applyVdotAdaptation,
+  applyAdaptation as applyAdaptationCore,
   generatePlan,
   vdotFromFitness,
   type AdaptationResult,
@@ -10,6 +11,8 @@ import {
   type Goal,
   type TrainingPlan,
 } from '@paceforge/core';
+
+import { createPersistStorage } from './storage';
 
 // In-Memory-Store für Profil, generierten Trainingsplan und importierte Aktivitäten
 // (MVP). Persistenz via expo-sqlite ist als Folgeschritt vorgesehen. Profil-Erstellung,
@@ -32,7 +35,9 @@ interface ProfileState {
   reset: () => void;
 }
 
-export const useProfileStore = create<ProfileState>((set) => ({
+export const useProfileStore = create<ProfileState>()(
+  persist(
+    (set) => ({
   profile: null,
   plan: null,
   activities: [],
@@ -54,10 +59,16 @@ export const useProfileStore = create<ProfileState>((set) => ({
   addActivity: (activity) => set((s) => ({ activities: [...s.activities, activity] })),
   applyAdaptation: (result) =>
     set((s) => {
-      if (!s.profile) return s;
-      const profile = applyVdotAdaptation(s.profile, result);
-      const plan = generatePlan(profile);
-      return { profile, plan };
+      if (!s.profile || !s.plan) return s;
+      return applyAdaptationCore(s.profile, s.plan, result);
     }),
   reset: () => set({ profile: null, plan: null, activities: [] }),
-}));
+    }),
+    {
+      name: 'paceforge-store',
+      storage: createJSONStorage(() => createPersistStorage()),
+      // Nur Daten persistieren (keine Aktionen).
+      partialize: (s) => ({ profile: s.profile, plan: s.plan, activities: s.activities }),
+    },
+  ),
+);

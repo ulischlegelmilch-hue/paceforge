@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { isRepeatBlock, type WorkoutStep } from '@paceforge/core';
 
 import { fitFileProvider } from '@/delivery/FitFileProvider';
+import { activeDeliveryProvider } from '@/delivery/providers';
 
 import { usePalette, type Palette } from '@/ui/colors';
 import {
@@ -59,7 +60,8 @@ export default function WorkoutScreen() {
   async function onExport() {
     try {
       setExporting(true);
-      const result = await fitFileProvider.exportWorkout(workout);
+      const provider = await activeDeliveryProvider();
+      const result = await provider.exportWorkout(workout);
       if (!(await fitFileProvider.isAvailable())) {
         Alert.alert('FIT-Datei erstellt', `Gespeichert als ${result.fileName} (${result.bytes} Bytes).`);
       }
