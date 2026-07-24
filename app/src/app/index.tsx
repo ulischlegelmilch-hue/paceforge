@@ -2,9 +2,18 @@ import { useState } from 'react';
 import { useRouter } from 'expo-router';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { allZones, paceMpsToPerKm, type RaceDistance, type ZoneKey } from '@paceforge/core';
+import {
+  allZones,
+  locateByDate,
+  paceMpsToPerKm,
+  weekOf,
+  ymdOf,
+  type RaceDistance,
+  type ZoneKey,
+} from '@paceforge/core';
 
 import { usePalette } from '@/ui/colors';
+import { DOW_SHORT, formatDistance, phaseColor, phaseLabel } from '@/ui/format';
 import { useProfileStore } from '@/store/profile';
 import { hasBackend } from '@/config';
 import { pullSnapshot, pushSnapshot } from '@/api/sync';
@@ -65,6 +74,9 @@ export default function HomeScreen() {
   }
 
   const zones = allZones(profile.currentVdot);
+  const today = ymdOf(new Date());
+  const todayLoc = plan ? locateByDate(plan, today) : undefined;
+  const thisWeek = plan ? weekOf(plan, today) : undefined;
 
   async function onSyncPush() {
     try {
@@ -113,6 +125,72 @@ export default function HomeScreen() {
             {profile.daysPerWeek} Trainingstage / Woche
           </Text>
         </View>
+
+        {/* Heute */}
+        <View style={[styles.card, { backgroundColor: p.card, borderColor: p.border }]}>
+          <Text style={[styles.cardLabel, { color: p.subtext }]}>Heute</Text>
+          {todayLoc && todayLoc.scheduled.workout.kind !== 'rest' ? (
+            <Pressable
+              onPress={() =>
+                router.push({
+                  pathname: '/workout',
+                  params: { week: todayLoc.weekIndex, day: todayLoc.scheduled.dayOfWeek },
+                })
+              }
+              style={({ pressed }) => [{ opacity: pressed ? 0.6 : 1 }]}
+            >
+              <Text style={[styles.goalText, { color: p.text }]}>{todayLoc.scheduled.workout.name}</Text>
+              <Text style={[styles.todaySub, { color: p.accent }]}>
+                {formatDistance(todayLoc.scheduled.workout.estimatedDistanceMeters ?? 0)} · zum Öffnen tippen ›
+              </Text>
+            </Pressable>
+          ) : (
+            <Text style={[styles.todayRest, { color: p.subtext }]}>
+              {todayLoc ? 'Ruhetag – Erholung zählt auch. 🌙' : 'Heute kein geplantes Training.'}
+            </Text>
+          )}
+        </View>
+
+        {/* Diese Woche */}
+        {thisWeek && (
+          <View style={[styles.card, { backgroundColor: p.card, borderColor: p.border }]}>
+            <View style={styles.weekHead}>
+              <Text style={[styles.cardLabel, { color: p.subtext }]}>
+                Diese Woche · Woche {thisWeek.index + 1}
+              </Text>
+              <View style={[styles.badge, { backgroundColor: phaseColor(thisWeek.phase) }]}>
+                <Text style={styles.badgeText}>{phaseLabel(thisWeek.phase)}</Text>
+              </View>
+            </View>
+            {thisWeek.workouts
+              .filter((w) => w.workout.kind !== 'rest')
+              .map((sw) => {
+                const isToday = sw.date === today;
+                return (
+                  <Pressable
+                    key={sw.date}
+                    onPress={() =>
+                      router.push({
+                        pathname: '/workout',
+                        params: { week: thisWeek.index, day: sw.dayOfWeek },
+                      })
+                    }
+                    style={({ pressed }) => [styles.dayRow, { borderTopColor: p.border, opacity: pressed ? 0.6 : 1 }]}
+                  >
+                    <Text style={[styles.dow, { color: isToday ? p.accent : p.subtext }]}>
+                      {DOW_SHORT[sw.dayOfWeek]}
+                    </Text>
+                    <Text style={[styles.woName, { color: p.text }]} numberOfLines={1}>
+                      {sw.workout.name}
+                    </Text>
+                    <Text style={[styles.woDist, { color: p.subtext }]}>
+                      {formatDistance(sw.workout.estimatedDistanceMeters ?? 0)}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+          </View>
+        )}
 
         <Text style={[styles.sectionTitle, { color: p.text }]}>Deine Trainings-Paces</Text>
         <View style={[styles.card, { backgroundColor: p.card, borderColor: p.border }]}>
@@ -203,6 +281,15 @@ const styles = StyleSheet.create({
   goalText: { fontSize: 20, fontWeight: '700', marginTop: 4 },
   vdot: { fontSize: 44, fontWeight: '800', marginVertical: 2 },
   sectionTitle: { fontSize: 18, fontWeight: '700', marginTop: 4 },
+  todaySub: { fontSize: 14, fontWeight: '600', marginTop: 4 },
+  todayRest: { fontSize: 16, marginTop: 4 },
+  weekHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 },
+  badge: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
+  badgeText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  dayRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, borderTopWidth: 1 },
+  dow: { width: 26, fontSize: 14, fontWeight: '700' },
+  woName: { flex: 1, fontSize: 15, fontWeight: '600' },
+  woDist: { fontSize: 14, fontVariant: ['tabular-nums'] },
   zoneRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
