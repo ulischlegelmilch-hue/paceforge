@@ -1,0 +1,107 @@
+import { describe, it, expect } from 'vitest';
+import type { AthleteProfile } from '../src/domain/athlete';
+import type { CompletedActivity } from '../src/domain/activity';
+import { generatePlan } from '../src/planner/generatePlan';
+import { makeEasyRun } from '../src/planner/workouts';
+import {
+  applyVdotAdaptation,
+  compareWorkout,
+  matchActivity,
+  suggestAdaptation,
+} from '../src/adaptation/adapt';
+
+const FIXED_START = new Date(2026, 0, 5); // Montag
+
+function profile(): AthleteProfile {
+  return {
+    id: 'athlete-1',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    goal: { distance: '10k', weeks: 12 },
+    fitness: { estimatedVdot: 50 },
+    currentVdot: 50,
+    daysPerWeek: 4,
+    units: 'metric',
+  };
+}
+
+function activity(distanceM: number, paceMps: number, dateYmd: string): CompletedActivity {
+  return {
+    id: `a-${dateYmd}`,
+    source: 'manual',
+    startTime: `${dateYmd}T07:00:00.000Z`,
+    totalDistanceMeters: distanceM,
+    totalDurationSeconds: Math.round(distanceM / paceMps),
+    avgPaceMps: paceMps,
+  };
+}
+
+describe('compareWorkout', () => {
+  const w = makeEasyRun('e', 50, 8000);
+  const planPace = w.estimatedDistanceMeters! / w.estimatedDurationSeconds!;
+
+  it('bewertet gleiche Pace als on-target', () => {
+    expect(compareWorkout(w, activity(8000, planPace, '2026-01-06')).assessment).toBe('on-target');
+  });
+  it('bewertet deutlich schnellere Pace als faster', () => {
+    expect(compareWorkout(w, activity(8000, planPace * 1.1, '2026-01-06')).assessment).toBe('faster');
+  });
+  it('bewertet deutlich langsamere Pace als slower', () => {
+    expect(compareWorkout(w, activity(8000, planPace * 0.9, '2026-01-06')).assessment).toBe('slower');
+  });
+  it('bewertet zu kurze Distanz als incomplete', () => {
+    expect(compareWorkout(w, activity(3000, planPace, '2026-01-06')).assessment).toBe('incomplete');
+  });
+});
+
+describe('matchActivity', () => {
+  it('ordnet eine Aktivität der Einheit am selben Tag zu', () => {
+    const plan = generatePlan(profile(), { startDate: FIXED_START });
+    const sw = plan.weeks.flatMap((w) => w.workouts).find((s) => s.workout.kind !== 'rest')!;
+    const a = activity(sw.workout.estimatedDistanceMeters ?? 5000, 3.2, sw.date);
+    expect(matchActivity(plan, a)?.date).toBe(sw.date);
+  });
+});
+
+describe('suggestAdaptation', () => {
+  const plan = generatePlan(profile(), { startDate: FIXED_START });
+  const nonRest = plan.weeks.flatMap((w) => w.workouts).filter((s) => s.workout.kind !== 'rest');
+
+  it('empfiehlt VDOT +1 bei mehreren deutlich schnelleren Läufen', () => {
+    const acts = nonRest.slice(0, 3).map((s) => {
+      const pace = (s.workout.estimatedDistanceMeters! / s.workout.estimatedDurationSeconds!) * 1.12;
+      return activity(s.workout.estimatedDistanceMeters!, pace, s.date);
+    });
+    const res = suggestAdaptation(plan, acts, { referenceDate: new Date(2026, 0, 1) });
+    expect(res.recommendedVdotDelta).toBe(1);
+    expect(res.reduceNextWeekVolume).toBe(false);
+  });
+
+  it('entlastet die nächste Woche nach ≥2 verpassten Einheiten in Folge', () => {
+    const res = suggestAdaptation(plan, [], { referenceDate: new Date(2026, 0, 20) });
+    expect(res.consecutiveMissed).toBeGreaterThanOrEqual(2);
+    expect(res.reduceNextWeekVolume).toBe(true);
+    expect(res.recommendedVdotDelta).toBe(0);
+  });
+
+  it('empfiehlt nichts, wenn alles im Plan liegt', () => {
+    const res = suggestAdaptation(plan, [], { referenceDate: new Date(2026, 0, 1) });
+    expect(res.recommendedVdotDelta).toBe(0);
+    expect(res.reduceNextWeekVolume).toBe(false);
+    expect(res.notes[0]).toMatch(/keine Anpassung/i);
+  });
+});
+
+describe('applyVdotAdaptation', () => {
+  it('erhöht die VDOT gemäß Empfehlung', () => {
+    const p = profile();
+    const updated = applyVdotAdaptation(p, {
+      recommendedVdotDelta: 1,
+      reduceNextWeekVolume: false,
+      consecutiveMissed: 0,
+      assessments: [],
+      notes: [],
+    });
+    expect(updated.currentVdot).toBe(51);
+    expect(p.currentVdot).toBe(50); // Original unverändert
+  });
+});

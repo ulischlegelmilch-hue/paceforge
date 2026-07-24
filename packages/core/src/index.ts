@@ -18,5 +18,8 @@ export * from './vdot/profile';
 export * from './planner/workouts';
 export * from './planner/generatePlan';
 
+// Aktivitäts-Auswertung & Adaption (framework-agnostisch, kein FIT-SDK)
+export * from './adaptation/adapt';
+
 // Utilities
 export * from './util/pace';
