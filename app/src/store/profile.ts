@@ -25,14 +25,27 @@ interface CreateProfileInput {
   longRunDay?: number;
 }
 
+interface SnapshotInput {
+  profile: AthleteProfile | null;
+  plan: TrainingPlan | null;
+  activities: CompletedActivity[];
+}
+
 interface ProfileState {
   profile: AthleteProfile | null;
   plan: TrainingPlan | null;
   activities: CompletedActivity[];
+  /** Stabile Geräte-ID als Sync-Schlüssel (einmalig erzeugt, persistiert). */
+  deviceId: string;
   createProfile: (input: CreateProfileInput) => AthleteProfile;
   addActivity: (activity: CompletedActivity) => void;
   applyAdaptation: (result: AdaptationResult) => void;
+  hydrateFromSnapshot: (snap: SnapshotInput) => void;
   reset: () => void;
+}
+
+function makeDeviceId(): string {
+  return `dev-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 export const useProfileStore = create<ProfileState>()(
@@ -41,6 +54,7 @@ export const useProfileStore = create<ProfileState>()(
   profile: null,
   plan: null,
   activities: [],
+  deviceId: makeDeviceId(),
   createProfile: ({ goal, fitness, daysPerWeek, longRunDay }) => {
     const profile: AthleteProfile = {
       id: `athlete-${Date.now()}`,
@@ -62,13 +76,20 @@ export const useProfileStore = create<ProfileState>()(
       if (!s.profile || !s.plan) return s;
       return applyAdaptationCore(s.profile, s.plan, result);
     }),
+  hydrateFromSnapshot: (snap) =>
+    set({ profile: snap.profile, plan: snap.plan, activities: snap.activities ?? [] }),
   reset: () => set({ profile: null, plan: null, activities: [] }),
     }),
     {
       name: 'paceforge-store',
       storage: createJSONStorage(() => createPersistStorage()),
       // Nur Daten persistieren (keine Aktionen).
-      partialize: (s) => ({ profile: s.profile, plan: s.plan, activities: s.activities }),
+      partialize: (s) => ({
+        profile: s.profile,
+        plan: s.plan,
+        activities: s.activities,
+        deviceId: s.deviceId,
+      }),
     },
   ),
 );

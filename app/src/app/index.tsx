@@ -1,10 +1,13 @@
+import { useState } from 'react';
 import { useRouter } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { allZones, paceMpsToPerKm, type RaceDistance, type ZoneKey } from '@paceforge/core';
 
 import { usePalette } from '@/ui/colors';
 import { useProfileStore } from '@/store/profile';
+import { hasBackend } from '@/config';
+import { pullSnapshot, pushSnapshot } from '@/api/sync';
 
 const DISTANCE_LABEL: Record<RaceDistance, string> = {
   '5k': '5 km',
@@ -28,7 +31,12 @@ export default function HomeScreen() {
   const p = usePalette();
   const router = useRouter();
   const profile = useProfileStore((s) => s.profile);
+  const plan = useProfileStore((s) => s.plan);
+  const activities = useProfileStore((s) => s.activities);
+  const deviceId = useProfileStore((s) => s.deviceId);
+  const hydrateFromSnapshot = useProfileStore((s) => s.hydrateFromSnapshot);
   const reset = useProfileStore((s) => s.reset);
+  const [syncBusy, setSyncBusy] = useState(false);
 
   if (!profile) {
     return (
@@ -57,6 +65,34 @@ export default function HomeScreen() {
   }
 
   const zones = allZones(profile.currentVdot);
+
+  async function onSyncPush() {
+    try {
+      setSyncBusy(true);
+      const at = await pushSnapshot(deviceId, { profile, plan, activities });
+      Alert.alert('In Cloud gesichert', `Stand: ${new Date(at).toLocaleString('de-DE')}`);
+    } catch (e) {
+      Alert.alert('Sichern fehlgeschlagen', e instanceof Error ? e.message : 'Unbekannter Fehler.');
+    } finally {
+      setSyncBusy(false);
+    }
+  }
+  async function onSyncPull() {
+    try {
+      setSyncBusy(true);
+      const snap = await pullSnapshot(deviceId);
+      if (!snap) {
+        Alert.alert('Nichts gefunden', 'Für dieses Gerät liegt noch kein Cloud-Stand vor.');
+        return;
+      }
+      hydrateFromSnapshot({ profile: snap.profile, plan: snap.plan, activities: snap.activities ?? [] });
+      Alert.alert('Aus Cloud geladen', 'Deine Daten wurden übernommen.');
+    } catch (e) {
+      Alert.alert('Laden fehlgeschlagen', e instanceof Error ? e.message : 'Unbekannter Fehler.');
+    } finally {
+      setSyncBusy(false);
+    }
+  }
 
   return (
     <SafeAreaView style={[styles.fill, { backgroundColor: p.bg }]}>
@@ -116,6 +152,33 @@ export default function HomeScreen() {
           <Text style={[styles.ctaText, { color: p.accent }]}>Fortschritt & Läufe importieren</Text>
         </Pressable>
 
+        {hasBackend && (
+          <View style={[styles.card, { backgroundColor: p.card, borderColor: p.border }]}>
+            <Text style={[styles.cardLabel, { color: p.subtext }]}>Cloud-Sync</Text>
+            <Text style={[styles.syncId, { color: p.subtext }]}>Gerät: {deviceId}</Text>
+            <View style={styles.syncRow}>
+              <Pressable
+                onPress={onSyncPush}
+                disabled={syncBusy}
+                style={[styles.syncBtn, { backgroundColor: p.accent, opacity: syncBusy ? 0.6 : 1 }]}
+              >
+                {syncBusy ? (
+                  <ActivityIndicator color={p.accentText} />
+                ) : (
+                  <Text style={[styles.syncBtnText, { color: p.accentText }]}>In Cloud sichern</Text>
+                )}
+              </Pressable>
+              <Pressable
+                onPress={onSyncPull}
+                disabled={syncBusy}
+                style={[styles.syncBtnOutline, { borderColor: p.accent, opacity: syncBusy ? 0.6 : 1 }]}
+              >
+                <Text style={[styles.syncBtnText, { color: p.accent }]}>Aus Cloud laden</Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
+
         <Pressable onPress={reset} style={styles.resetBtn}>
           <Text style={[styles.resetText, { color: p.subtext }]}>Angaben zurücksetzen</Text>
         </Pressable>
@@ -150,4 +213,9 @@ const styles = StyleSheet.create({
   zonePace: { fontSize: 15, fontVariant: ['tabular-nums'] },
   resetBtn: { alignItems: 'center', paddingVertical: 10 },
   resetText: { fontSize: 14 },
+  syncId: { fontSize: 12, marginTop: 4, marginBottom: 12, fontVariant: ['tabular-nums'] },
+  syncRow: { flexDirection: 'row', gap: 10 },
+  syncBtn: { flex: 1, borderRadius: 12, paddingVertical: 12, alignItems: 'center', minHeight: 44, justifyContent: 'center' },
+  syncBtnOutline: { flex: 1, borderRadius: 12, borderWidth: 1.5, paddingVertical: 12, alignItems: 'center', minHeight: 44, justifyContent: 'center' },
+  syncBtnText: { fontSize: 14, fontWeight: '700' },
 });

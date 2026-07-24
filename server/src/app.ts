@@ -1,5 +1,7 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import { parseGoalSmart } from './parseGoalLLM';
+import { registerSync } from './sync';
+import { registerGarmin } from './garmin';
 
 // Baut die Fastify-App OHNE zu lauschen – so kann sie im Test per app.inject()
 // angesprochen werden. Das Lauschen passiert nur in index.ts.
@@ -27,6 +29,10 @@ export function buildApp(): FastifyInstance {
     const { result, source } = await parseGoalSmart(text);
     return { parsed: result, source };
   });
+
+  // Cross-Device-Sync + Garmin-OAuth-Gerüst (Phase 2).
+  registerSync(app);
+  registerGarmin(app);
 
   return app;
 }
