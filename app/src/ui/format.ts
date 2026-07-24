@@ -1,5 +1,6 @@
 import {
   paceMpsToPerKm,
+  type Assessment,
   type PlanPhase,
   type StepDuration,
   type StepTarget,
@@ -57,3 +58,16 @@ export function phaseColor(p: PlanPhase): string {
 }
 
 export const DOW_SHORT = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+
+const ASSESSMENT: Record<Assessment, { label: string; color: string }> = {
+  'on-target': { label: 'im Ziel', color: '#16a34a' },
+  faster: { label: 'schneller', color: '#3b82f6' },
+  slower: { label: 'langsamer', color: '#d97706' },
+  incomplete: { label: 'unvollständig', color: '#dc2626' },
+};
+export function assessmentLabel(a: Assessment): string {
+  return ASSESSMENT[a].label;
+}
+export function assessmentColor(a: Assessment): string {
+  return ASSESSMENT[a].color;
+}

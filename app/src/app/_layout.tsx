@@ -10,6 +10,7 @@ export default function RootLayout() {
         <Stack.Screen name="onboarding" />
         <Stack.Screen name="plan" />
         <Stack.Screen name="workout" />
+        <Stack.Screen name="activities" />
       </Stack>
     </>
   );

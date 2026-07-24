@@ -106,6 +106,16 @@ export default function HomeScreen() {
           <Text style={[styles.ctaText, { color: p.accentText }]}>Trainingsplan ansehen</Text>
         </Pressable>
 
+        <Pressable
+          onPress={() => router.push('/activities')}
+          style={({ pressed }) => [
+            styles.secondaryCta,
+            { borderColor: p.accent, opacity: pressed ? 0.7 : 1 },
+          ]}
+        >
+          <Text style={[styles.ctaText, { color: p.accent }]}>Fortschritt & Läufe importieren</Text>
+        </Pressable>
+
         <Pressable onPress={reset} style={styles.resetBtn}>
           <Text style={[styles.resetText, { color: p.subtext }]}>Angaben zurücksetzen</Text>
         </Pressable>
@@ -122,6 +132,7 @@ const styles = StyleSheet.create({
   leadSub: { fontSize: 15, lineHeight: 22, marginTop: 4 },
   cta: { marginTop: 24, borderRadius: 14, paddingVertical: 16, alignItems: 'center' },
   planCta: { marginTop: 4, borderRadius: 14, paddingVertical: 16, alignItems: 'center' },
+  secondaryCta: { marginTop: 4, borderRadius: 14, borderWidth: 1.5, paddingVertical: 16, alignItems: 'center' },
   ctaText: { fontSize: 17, fontWeight: '700' },
   scroll: { padding: 20, gap: 16 },
   card: { borderRadius: 16, borderWidth: 1, padding: 18 },
