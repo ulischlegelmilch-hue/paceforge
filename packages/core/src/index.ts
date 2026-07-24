@@ -14,5 +14,9 @@ export * from './vdot/formulas';
 export * from './vdot/zones';
 export * from './vdot/profile';
 
+// Plan-Generierung
+export * from './planner/workouts';
+export * from './planner/generatePlan';
+
 // Utilities
 export * from './util/pace';
