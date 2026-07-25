@@ -4,6 +4,7 @@ import {
   applyAdaptation as applyAdaptationCore,
   generatePlan,
   vdotFromFitness,
+  vdotFromRace,
   type AdaptationResult,
   type AthleteProfile,
   type CompletedActivity,
@@ -40,6 +41,8 @@ interface ProfileState {
   createProfile: (input: CreateProfileInput) => AthleteProfile;
   addActivity: (activity: CompletedActivity) => void;
   applyAdaptation: (result: AdaptationResult) => void;
+  /** Fitness aus einer neuen Bestzeit/Testleistung neu berechnen (VDOT + Plan). */
+  updateFitnessFromRace: (input: { distanceMeters: number; timeSeconds: number }) => void;
   hydrateFromSnapshot: (snap: SnapshotInput) => void;
   reset: () => void;
 }
@@ -75,6 +78,21 @@ export const useProfileStore = create<ProfileState>()(
     set((s) => {
       if (!s.profile || !s.plan) return s;
       return applyAdaptationCore(s.profile, s.plan, result);
+    }),
+  updateFitnessFromRace: ({ distanceMeters, timeSeconds }) =>
+    set((s) => {
+      if (!s.profile) return s;
+      const currentVdot = Math.round(vdotFromRace(distanceMeters, timeSeconds) * 10) / 10;
+      const profile: AthleteProfile = {
+        ...s.profile,
+        currentVdot,
+        fitness: { ...s.profile.fitness, recentRace: { distanceMeters, timeSeconds } },
+      };
+      // Plan mit den neuen Pace-Zonen neu generieren, Startdatum erhalten.
+      const startIso = s.plan?.weeks[0]?.workouts[0]?.date;
+      const startDate = startIso ? new Date(`${startIso}T00:00:00`) : undefined;
+      const plan = generatePlan(profile, { startDate });
+      return { profile, plan };
     }),
   hydrateFromSnapshot: (snap) =>
     set({ profile: snap.profile, plan: snap.plan, activities: snap.activities ?? [] }),

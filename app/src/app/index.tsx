@@ -128,6 +128,9 @@ export default function HomeScreen() {
           <Text style={[styles.cardLabel, { color: p.subtext }]}>
             {profile.daysPerWeek} Trainingstage / Woche
           </Text>
+          <Pressable onPress={() => router.push('/recalibrate')} hitSlop={8}>
+            <Text style={[styles.updateLink, { color: p.accent }]}>Neue Bestzeit? Fitness aktualisieren ›</Text>
+          </Pressable>
         </View>
 
         {/* Heute */}
@@ -300,6 +303,7 @@ const styles = StyleSheet.create({
   cardLabel: { fontSize: 13, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.4 },
   goalText: { fontSize: 20, fontWeight: '700', marginTop: 4 },
   vdot: { fontSize: 44, fontWeight: '800', marginVertical: 2 },
+  updateLink: { fontSize: 14, fontWeight: '600', marginTop: 12 },
   sectionTitle: { fontSize: 18, fontWeight: '700', marginTop: 4 },
   todaySub: { fontSize: 14, fontWeight: '600', marginTop: 4 },
   todayRest: { fontSize: 16, marginTop: 4 },
