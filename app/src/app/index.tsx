@@ -6,14 +6,16 @@ import {
   allZones,
   locateByDate,
   paceMpsToPerKm,
+  predictedRaceTimes,
   weekOf,
   ymdOf,
   type RaceDistance,
+  type StandardRace,
   type ZoneKey,
 } from '@paceforge/core';
 
 import { usePalette } from '@/ui/colors';
-import { DOW_SHORT, formatDistance, phaseColor, phaseLabel } from '@/ui/format';
+import { DOW_SHORT, formatDistance, formatRaceTime, phaseColor, phaseLabel } from '@/ui/format';
 import { useProfileStore } from '@/store/profile';
 import { hasBackend } from '@/config';
 import { pullSnapshot, pushSnapshot } from '@/api/sync';
@@ -35,6 +37,7 @@ const ZONE_LABEL: Record<ZoneKey, string> = {
 };
 
 const ZONE_ORDER: ZoneKey[] = ['easy', 'marathon', 'threshold', 'interval', 'repetition'];
+const RACE_ORDER: StandardRace[] = ['5k', '10k', 'half', 'marathon'];
 
 export default function HomeScreen() {
   const p = usePalette();
@@ -74,6 +77,7 @@ export default function HomeScreen() {
   }
 
   const zones = allZones(profile.currentVdot);
+  const races = predictedRaceTimes(profile.currentVdot);
   const today = ymdOf(new Date());
   const todayLoc = plan ? locateByDate(plan, today) : undefined;
   const thisWeek = plan ? weekOf(plan, today) : undefined;
@@ -206,6 +210,22 @@ export default function HomeScreen() {
               <Text style={[styles.zonePace, { color: p.subtext }]}>
                 {paceMpsToPerKm(zones[z].highMps)}–{paceMpsToPerKm(zones[z].lowMps)} /km
               </Text>
+            </View>
+          ))}
+        </View>
+
+        <Text style={[styles.sectionTitle, { color: p.text }]}>Geschätzte Wettkampfzeiten</Text>
+        <View style={[styles.card, { backgroundColor: p.card, borderColor: p.border }]}>
+          {RACE_ORDER.map((r, i) => (
+            <View
+              key={r}
+              style={[
+                styles.zoneRow,
+                i < RACE_ORDER.length - 1 && { borderBottomWidth: 1, borderBottomColor: p.border },
+              ]}
+            >
+              <Text style={[styles.zoneLabel, { color: p.text }]}>{DISTANCE_LABEL[r]}</Text>
+              <Text style={[styles.zonePace, { color: p.subtext }]}>{formatRaceTime(races[r])}</Text>
             </View>
           ))}
         </View>

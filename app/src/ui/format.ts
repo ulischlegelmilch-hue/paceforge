@@ -59,6 +59,17 @@ export function phaseColor(p: PlanPhase): string {
 
 export const DOW_SHORT = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
 
+/** Wettkampfzeit: "H:MM:SS" ab 1 Stunde, sonst "M:SS". */
+export function formatRaceTime(seconds: number): string {
+  const s = Math.round(seconds);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  const ss = String(sec).padStart(2, '0');
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${ss}`;
+  return `${m}:${ss}`;
+}
+
 const ASSESSMENT: Record<Assessment, { label: string; color: string }> = {
   'on-target': { label: 'im Ziel', color: '#16a34a' },
   faster: { label: 'schneller', color: '#3b82f6' },

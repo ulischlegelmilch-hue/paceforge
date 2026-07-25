@@ -13,6 +13,7 @@ export * from './delivery/WorkoutDeliveryProvider';
 export * from './vdot/formulas';
 export * from './vdot/zones';
 export * from './vdot/profile';
+export * from './vdot/predict';
 
 // Plan-Generierung
 export * from './planner/workouts';
