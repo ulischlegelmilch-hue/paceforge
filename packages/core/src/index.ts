@@ -26,5 +26,9 @@ export * from './adaptation/adapt';
 // Natürlichsprachliche Zieleingabe (regelbasiert)
 export * from './nlp/parseGoal';
 
+// Kraft-Modul + Ernährungscoach (evidenzbasiert)
+export * from './strength/index';
+export * from './nutrition/index';
+
 // Utilities
 export * from './util/pace';
