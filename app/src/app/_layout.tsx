@@ -12,6 +12,8 @@ export default function RootLayout() {
         <Stack.Screen name="workout" />
         <Stack.Screen name="activities" />
         <Stack.Screen name="recalibrate" />
+        <Stack.Screen name="strength" />
+        <Stack.Screen name="nutrition" />
       </Stack>
     </>
   );

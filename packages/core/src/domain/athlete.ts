@@ -29,6 +29,11 @@ export interface FitnessInput {
 
 export type Units = 'metric' | 'imperial';
 
+export interface StrengthPrefs {
+  enabled: boolean;
+  equipment: 'gym' | 'bodyweight';
+}
+
 export interface AthleteProfile {
   id: string;
   createdAt: string;              // ISO
@@ -44,4 +49,8 @@ export interface AthleteProfile {
   longRunDay?: number;
   device?: { brand: 'garmin'; model?: string };
   units: Units;
+  /** Körpergewicht in kg (optional) – für Ernährungs-Gramm-Ziele. */
+  weightKg?: number;
+  /** Kraft-Modul-Einstellungen (optional; Default: aktiv, Körpergewicht). */
+  strength?: StrengthPrefs;
 }

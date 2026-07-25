@@ -43,8 +43,19 @@ interface ProfileState {
   applyAdaptation: (result: AdaptationResult) => void;
   /** Fitness aus einer neuen Bestzeit/Testleistung neu berechnen (VDOT + Plan). */
   updateFitnessFromRace: (input: { distanceMeters: number; timeSeconds: number }) => void;
+  setStrengthEquipment: (equipment: 'gym' | 'bodyweight') => void;
+  setStrengthEnabled: (enabled: boolean) => void;
+  setWeightKg: (kg: number | undefined) => void;
   hydrateFromSnapshot: (snap: SnapshotInput) => void;
   reset: () => void;
+}
+
+function patchProfile(
+  s: { profile: AthleteProfile | null },
+  patch: Partial<AthleteProfile>,
+): { profile: AthleteProfile | null } {
+  if (!s.profile) return s;
+  return { profile: { ...s.profile, ...patch } };
 }
 
 function makeDeviceId(): string {
@@ -68,6 +79,7 @@ export const useProfileStore = create<ProfileState>()(
       daysPerWeek,
       longRunDay,
       units: 'metric',
+      strength: { enabled: true, equipment: 'bodyweight' },
     };
     const plan = generatePlan(profile);
     set({ profile, plan, activities: [] });
@@ -94,6 +106,19 @@ export const useProfileStore = create<ProfileState>()(
       const plan = generatePlan(profile, { startDate });
       return { profile, plan };
     }),
+  setStrengthEquipment: (equipment) =>
+    set((s) => {
+      if (!s.profile) return s;
+      const strength = { enabled: s.profile.strength?.enabled ?? true, equipment };
+      return patchProfile(s, { strength });
+    }),
+  setStrengthEnabled: (enabled) =>
+    set((s) => {
+      if (!s.profile) return s;
+      const strength = { enabled, equipment: s.profile.strength?.equipment ?? 'bodyweight' };
+      return patchProfile(s, { strength });
+    }),
+  setWeightKg: (kg) => set((s) => patchProfile(s, { weightKg: kg })),
   hydrateFromSnapshot: (snap) =>
     set({ profile: snap.profile, plan: snap.plan, activities: snap.activities ?? [] }),
   reset: () => set({ profile: null, plan: null, activities: [] }),

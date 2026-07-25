@@ -253,6 +253,21 @@ export default function HomeScreen() {
           <Text style={[styles.ctaText, { color: p.accent }]}>Fortschritt & Läufe importieren</Text>
         </Pressable>
 
+        <View style={styles.dualRow}>
+          <Pressable
+            onPress={() => router.push('/strength')}
+            style={({ pressed }) => [styles.dualCta, { borderColor: p.accent, opacity: pressed ? 0.7 : 1 }]}
+          >
+            <Text style={[styles.dualText, { color: p.accent }]}>Krafttraining</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => router.push('/nutrition')}
+            style={({ pressed }) => [styles.dualCta, { borderColor: p.accent, opacity: pressed ? 0.7 : 1 }]}
+          >
+            <Text style={[styles.dualText, { color: p.accent }]}>Ernährungscoach</Text>
+          </Pressable>
+        </View>
+
         {hasBackend && (
           <View style={[styles.card, { backgroundColor: p.card, borderColor: p.border }]}>
             <Text style={[styles.cardLabel, { color: p.subtext }]}>Cloud-Sync</Text>
@@ -297,6 +312,9 @@ const styles = StyleSheet.create({
   cta: { marginTop: 24, borderRadius: 14, paddingVertical: 16, alignItems: 'center' },
   planCta: { marginTop: 4, borderRadius: 14, paddingVertical: 16, alignItems: 'center' },
   secondaryCta: { marginTop: 4, borderRadius: 14, borderWidth: 1.5, paddingVertical: 16, alignItems: 'center' },
+  dualRow: { flexDirection: 'row', gap: 10, marginTop: 4 },
+  dualCta: { flex: 1, borderRadius: 14, borderWidth: 1.5, paddingVertical: 16, alignItems: 'center' },
+  dualText: { fontSize: 15, fontWeight: '700' },
   ctaText: { fontSize: 17, fontWeight: '700' },
   scroll: { padding: 20, gap: 16 },
   card: { borderRadius: 16, borderWidth: 1, padding: 18 },
