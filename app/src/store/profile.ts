@@ -44,7 +44,8 @@ interface ProfileState {
   /** Fitness aus einer neuen Bestzeit/Testleistung neu berechnen (VDOT + Plan). */
   updateFitnessFromRace: (input: { distanceMeters: number; timeSeconds: number }) => void;
   setStrengthEquipment: (equipment: 'gym' | 'bodyweight') => void;
-  setStrengthEnabled: (enabled: boolean) => void;
+  setStrengthSessions: (sessionsPerWeek: number) => void;
+  setDaysPerWeek: (daysPerWeek: number) => void;
   setWeightKg: (kg: number | undefined) => void;
   hydrateFromSnapshot: (snap: SnapshotInput) => void;
   reset: () => void;
@@ -79,7 +80,7 @@ export const useProfileStore = create<ProfileState>()(
       daysPerWeek,
       longRunDay,
       units: 'metric',
-      strength: { enabled: true, equipment: 'bodyweight' },
+      strength: { sessionsPerWeek: 2, equipment: 'bodyweight' },
     };
     const plan = generatePlan(profile);
     set({ profile, plan, activities: [] });
@@ -109,14 +110,27 @@ export const useProfileStore = create<ProfileState>()(
   setStrengthEquipment: (equipment) =>
     set((s) => {
       if (!s.profile) return s;
-      const strength = { enabled: s.profile.strength?.enabled ?? true, equipment };
+      const strength = { sessionsPerWeek: s.profile.strength?.sessionsPerWeek ?? 2, equipment };
       return patchProfile(s, { strength });
     }),
-  setStrengthEnabled: (enabled) =>
+  setStrengthSessions: (sessionsPerWeek) =>
     set((s) => {
       if (!s.profile) return s;
-      const strength = { enabled, equipment: s.profile.strength?.equipment ?? 'bodyweight' };
+      const strength = {
+        sessionsPerWeek: Math.max(0, Math.min(3, Math.round(sessionsPerWeek))),
+        equipment: s.profile.strength?.equipment ?? 'bodyweight',
+      };
       return patchProfile(s, { strength });
+    }),
+  setDaysPerWeek: (daysPerWeek) =>
+    set((s) => {
+      if (!s.profile || !s.plan) return s;
+      const days = Math.max(3, Math.min(6, Math.round(daysPerWeek)));
+      const profile: AthleteProfile = { ...s.profile, daysPerWeek: days };
+      const startIso = s.plan.weeks[0]?.workouts[0]?.date;
+      const startDate = startIso ? new Date(`${startIso}T00:00:00`) : undefined;
+      const plan = generatePlan(profile, { startDate });
+      return { profile, plan };
     }),
   setWeightKg: (kg) => set((s) => patchProfile(s, { weightKg: kg })),
   hydrateFromSnapshot: (snap) =>

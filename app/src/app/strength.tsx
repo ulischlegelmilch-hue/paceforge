@@ -33,10 +33,12 @@ export default function StrengthScreen() {
   const setEquipment = useProfileStore((s) => s.setStrengthEquipment);
 
   const equipment = profile?.strength?.equipment ?? 'bodyweight';
+  const sessionsPerWeek = profile?.strength?.sessionsPerWeek ?? 2;
   const today = ymdOf(new Date());
   const week = plan ? weekOf(plan, today) : undefined;
-  const sessions = week ? strengthSessionsForPhase(week.phase, equipment) : [];
-  const days = week ? hardRunDays(week) : [];
+  const allSessions = week ? strengthSessionsForPhase(week.phase, equipment) : [];
+  const sessions = allSessions.slice(0, sessionsPerWeek);
+  const days = (week ? hardRunDays(week) : []).slice(0, sessionsPerWeek);
 
   return (
     <SafeAreaView style={[styles.fill, { backgroundColor: p.bg }]}>
@@ -62,8 +64,16 @@ export default function StrengthScreen() {
           </Text>
         )}
 
-        {sessions.length === 0 ? (
+        {!week ? (
           <Text style={[styles.sub, { color: p.subtext }]}>Erst einen Trainingsplan erstellen.</Text>
+        ) : sessionsPerWeek === 0 ? (
+          <Pressable
+            onPress={() => router.push('/training')}
+            style={[styles.card, { backgroundColor: p.card, borderColor: p.border }]}
+          >
+            <Text style={[styles.sessionName, { color: p.text }]}>Krafttraining ist aus</Text>
+            <Text style={[styles.focus, { color: p.accent }]}>Im Trainingsumfang aktivieren ›</Text>
+          </Pressable>
         ) : (
           sessions.map((s) => (
             <View key={s.id} style={[styles.card, { backgroundColor: p.card, borderColor: p.border }]}>

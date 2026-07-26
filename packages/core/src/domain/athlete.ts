@@ -30,7 +30,8 @@ export interface FitnessInput {
 export type Units = 'metric' | 'imperial';
 
 export interface StrengthPrefs {
-  enabled: boolean;
+  /** Krafteinheiten pro Woche (0 = aus). */
+  sessionsPerWeek: number;
   equipment: 'gym' | 'bodyweight';
 }
 

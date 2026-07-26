@@ -131,6 +131,9 @@ export default function HomeScreen() {
           <Pressable onPress={() => router.push('/recalibrate')} hitSlop={8}>
             <Text style={[styles.updateLink, { color: p.accent }]}>Neue Bestzeit? Fitness aktualisieren ›</Text>
           </Pressable>
+          <Pressable onPress={() => router.push('/training')} hitSlop={8}>
+            <Text style={[styles.updateLink, { color: p.accent }]}>Trainingsumfang & Tipps ›</Text>
+          </Pressable>
         </View>
 
         {/* Heute */}

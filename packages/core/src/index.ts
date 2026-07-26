@@ -30,5 +30,8 @@ export * from './nlp/parseGoal';
 export * from './strength/index';
 export * from './nutrition/index';
 
+// Trainingsumfang-Bewertung / Coaching-Tipps
+export * from './advice/index';
+
 // Utilities
 export * from './util/pace';
