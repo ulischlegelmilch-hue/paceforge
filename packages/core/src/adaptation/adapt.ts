@@ -4,6 +4,7 @@ import type { PlanWeek, ScheduledWorkout, TrainingPlan } from '../domain/plan';
 import type { StepDuration, Workout } from '../domain/workout';
 import { isRepeatBlock } from '../domain/workout';
 import { generatePlan } from '../planner/generatePlan';
+import { gradeAdjustedDistance } from '../grade/index';
 
 // Soll-Ist-Vergleich (geplant vs. tatsächlich) + regelbasierte Adaptions-Vorschläge.
 // KEIN LLM. Alle Schwellen sind hier zentral dokumentiert.
@@ -29,7 +30,12 @@ export function compareWorkout(planned: Workout, actual: CompletedActivity): Wor
   const plannedDistanceMeters = planned.estimatedDistanceMeters ?? 0;
   const plannedDurationSeconds = planned.estimatedDurationSeconds ?? 0;
   const plannedAvgPaceMps = plannedDurationSeconds > 0 ? plannedDistanceMeters / plannedDurationSeconds : 0;
-  const actualAvgPaceMps = actual.avgPaceMps;
+  // Höhenkorrigiert: ein hügeliger Lauf wird nicht faelschlich als „zu langsam" bewertet.
+  const actualDistEff = actual.totalAscentMeters
+    ? gradeAdjustedDistance(actual.totalDistanceMeters, actual.totalAscentMeters)
+    : actual.totalDistanceMeters;
+  const actualAvgPaceMps =
+    actual.totalDurationSeconds > 0 ? actualDistEff / actual.totalDurationSeconds : actual.avgPaceMps;
 
   const distanceRatio = plannedDistanceMeters > 0 ? actual.totalDistanceMeters / plannedDistanceMeters : 1;
   const paceRatio = plannedAvgPaceMps > 0 ? actualAvgPaceMps / plannedAvgPaceMps : 1;

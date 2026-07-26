@@ -55,6 +55,8 @@ export function decodeActivity(bytes: Uint8Array, options: DecodeActivityOptions
   }
 
   const avgPaceMps = num(session?.avgSpeed) || totalDistanceMeters / totalDurationSeconds;
+  const totalAscentMeters =
+    num(session?.totalAscent) || laps.reduce((s, l) => s + num((l as { totalAscent?: number }).totalAscent), 0);
 
   const activityLaps: ActivityLap[] = laps.map((l) => {
     const d = num(l.totalDistance);
@@ -75,6 +77,7 @@ export function decodeActivity(bytes: Uint8Array, options: DecodeActivityOptions
     totalDurationSeconds: Math.round(totalDurationSeconds),
     avgPaceMps,
     avgHeartRate: typeof session?.avgHeartRate === 'number' ? session.avgHeartRate : undefined,
+    totalAscentMeters: totalAscentMeters > 0 ? Math.round(totalAscentMeters) : undefined,
     laps: activityLaps.length > 0 ? activityLaps : undefined,
   };
 }

@@ -89,7 +89,7 @@ describe('vdotFromFitness', () => {
   });
 
   it('nutzt sonst die Selbsteinschätzung', () => {
-    expect(vdotFromFitness({ selfRatedLevel: 'intermediate' })).toBe(42);
+    expect(vdotFromFitness({ selfRatedLevel: 'intermediate' })).toBe(40);
   });
 
   it('liefert einen konservativen Default ohne jede Angabe', () => {

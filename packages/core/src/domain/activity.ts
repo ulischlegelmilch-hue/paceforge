@@ -18,6 +18,8 @@ export interface CompletedActivity {
   totalDurationSeconds: number;
   avgPaceMps: number;
   avgHeartRate?: number;
+  /** Gesamtanstieg in Metern (für höhenkorrigierte Auswertung). */
+  totalAscentMeters?: number;
   laps?: ActivityLap[];
   /** An eine geplante Einheit gematcht (Datum), falls zugeordnet. */
   linkedScheduledWorkoutDate?: string;

@@ -4,10 +4,11 @@ import { vdotFromRace } from './formulas';
 // Ableitung der Start-VDOT aus der Onboarding-Fitness-Eingabe.
 // Priorität: echte Bestzeit > direkte VDOT-Schätzung > Selbsteinschätzung.
 
+// Konservative Stufen nach Recherche (Freizeitläufer): 30–35 / 38–44 / 46–52 → 32/40/48.
 const LEVEL_VDOT: Record<SelfRatedLevel, number> = {
   beginner: 32,
-  intermediate: 42,
-  advanced: 50,
+  intermediate: 40,
+  advanced: 48,
 };
 
 /** Konservativer Default, falls gar keine Angabe vorliegt. */

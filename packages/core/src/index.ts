@@ -36,5 +36,8 @@ export * from './advice/index';
 // Kalender-Export (.ics)
 export * from './calendar/ics';
 
+// Höhenmeter → flaches Äquivalent (Minetti/Strava)
+export * from './grade/index';
+
 // Utilities
 export * from './util/pace';
