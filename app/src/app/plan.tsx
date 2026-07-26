@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { strengthScheduleForWeek } from '@paceforge/core';
 
 import { usePalette } from '@/ui/colors';
 import { DOW_SHORT, formatDistance, phaseColor, phaseLabel } from '@/ui/format';
@@ -10,6 +11,9 @@ export default function PlanScreen() {
   const p = usePalette();
   const router = useRouter();
   const plan = useProfileStore((s) => s.plan);
+  const profile = useProfileStore((s) => s.profile);
+  const eq = profile?.strength?.equipment ?? 'bodyweight';
+  const spw = profile?.strength?.sessionsPerWeek ?? 2;
 
   if (!plan) {
     return (
@@ -37,6 +41,7 @@ export default function PlanScreen() {
       <ScrollView contentContainerStyle={styles.scroll}>
         {plan.weeks.map((week) => {
           const training = week.workouts.filter((w) => w.workout.kind !== 'rest');
+          const strengthDays = new Set(strengthScheduleForWeek(week, eq, spw).map((s) => s.dayOfWeek));
           return (
             <View key={week.index} style={[styles.card, { backgroundColor: p.card, borderColor: p.border }]}>
               <View style={styles.weekHead}>
@@ -59,6 +64,9 @@ export default function PlanScreen() {
                   <Text style={[styles.woName, { color: p.text }]} numberOfLines={1}>
                     {sw.workout.name}
                   </Text>
+                  {strengthDays.has(sw.dayOfWeek) && (
+                    <Text style={[styles.kraftTag, { color: p.accent, borderColor: p.accent }]}>Kraft</Text>
+                  )}
                   <Text style={[styles.woDist, { color: p.subtext }]}>
                     {formatDistance(sw.workout.estimatedDistanceMeters ?? 0)}
                   </Text>
@@ -95,6 +103,7 @@ const styles = StyleSheet.create({
   dow: { width: 26, fontSize: 14, fontWeight: '700' },
   woName: { flex: 1, fontSize: 15, fontWeight: '600' },
   woDist: { fontSize: 14, fontVariant: ['tabular-nums'] },
+  kraftTag: { fontSize: 11, fontWeight: '700', borderWidth: 1, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 1, overflow: 'hidden' },
   empty: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 16, padding: 24 },
   emptyText: { fontSize: 16 },
   cta: { borderRadius: 14, paddingVertical: 14, paddingHorizontal: 22 },

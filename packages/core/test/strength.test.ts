@@ -4,6 +4,8 @@ import { generatePlan } from '../src/planner/generatePlan';
 import {
   hardRunDays,
   strengthKindForPhase,
+  strengthOnDay,
+  strengthScheduleForWeek,
   strengthSessionsForPhase,
 } from '../src/strength/index';
 
@@ -61,5 +63,35 @@ describe('hardRunDays', () => {
     expect(days.length).toBeGreaterThanOrEqual(1);
     // jeder Tag ist ein gültiger Wochentag 0..6
     expect(days.every((d) => d >= 0 && d <= 6)).toBe(true);
+  });
+});
+
+describe('strengthScheduleForWeek', () => {
+  const profile: AthleteProfile = {
+    id: 'a1',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    goal: { distance: '10k', weeks: 12 },
+    fitness: { estimatedVdot: 50 },
+    currentVdot: 50,
+    daysPerWeek: 4,
+    units: 'metric',
+  };
+  const week = generatePlan(profile, { startDate: new Date(2026, 0, 5) }).weeks[1]!;
+
+  it('legt 2 Einheiten auf Trainingstage, nicht auf Ruhetage', () => {
+    const sched = strengthScheduleForWeek(week, 'gym', 2);
+    expect(sched).toHaveLength(2);
+    const trainingDays = new Set(
+      week.workouts.filter((w) => w.workout.kind !== 'rest').map((w) => w.dayOfWeek),
+    );
+    expect(sched.every((s) => trainingDays.has(s.dayOfWeek))).toBe(true);
+    // verschiedene Tage
+    expect(sched[0]!.dayOfWeek).not.toBe(sched[1]!.dayOfWeek);
+  });
+
+  it('gibt bei 0 Einheiten nichts zurück; strengthOnDay findet die Einheit', () => {
+    expect(strengthScheduleForWeek(week, 'gym', 0)).toHaveLength(0);
+    const first = strengthScheduleForWeek(week, 'gym', 1)[0]!;
+    expect(strengthOnDay(week, 'gym', 1, first.dayOfWeek)?.id).toBe(first.session.id);
   });
 });

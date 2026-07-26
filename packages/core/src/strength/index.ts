@@ -199,6 +199,46 @@ export function hardRunDays(week: PlanWeek): number[] {
   return week.workouts.filter((w) => QUALITY_KINDS.has(w.workout.kind)).map((w) => w.dayOfWeek);
 }
 
+export interface ScheduledStrength {
+  dayOfWeek: number;
+  session: StrengthSession;
+}
+
+/**
+ * Verteilt die gewählten Krafteinheiten einer Woche auf Tage: harte Lauftage
+ * zuerst (Interferenz gering halten), dann Long-Run-Tag, dann übrige Lauftage.
+ */
+export function strengthScheduleForWeek(
+  week: PlanWeek,
+  equipment: StrengthEquipment,
+  sessionsPerWeek: number,
+): ScheduledStrength[] {
+  if (sessionsPerWeek <= 0) return [];
+  const sessions = strengthSessionsForPhase(week.phase, equipment).slice(0, sessionsPerWeek);
+  if (sessions.length === 0) return [];
+
+  const hard = hardRunDays(week);
+  const longDays = week.workouts.filter((w) => w.workout.kind === 'long').map((w) => w.dayOfWeek);
+  const otherDays = week.workouts.filter((w) => w.workout.kind !== 'rest').map((w) => w.dayOfWeek);
+
+  const order: number[] = [];
+  for (const d of [...hard, ...longDays, ...otherDays]) if (!order.includes(d)) order.push(d);
+
+  const chosen = order.slice(0, sessions.length);
+  return chosen.map((dayOfWeek, i) => ({ dayOfWeek, session: sessions[i]! }));
+}
+
+/** Die Krafteinheit an einem bestimmten Wochentag (oder undefined). */
+export function strengthOnDay(
+  week: PlanWeek,
+  equipment: StrengthEquipment,
+  sessionsPerWeek: number,
+  dayOfWeek: number,
+): StrengthSession | undefined {
+  return strengthScheduleForWeek(week, equipment, sessionsPerWeek).find((s) => s.dayOfWeek === dayOfWeek)
+    ?.session;
+}
+
 /** Evidenz-/Sicherheitshinweise fürs Kraft-UI. */
 export const STRENGTH_NOTES = {
   benefit:

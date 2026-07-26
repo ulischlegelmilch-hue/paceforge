@@ -4,9 +4,12 @@ import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   allZones,
+  kindLabel,
   locateByDate,
   paceMpsToPerKm,
   predictedRaceTimes,
+  strengthOnDay,
+  strengthScheduleForWeek,
   weekOf,
   ymdOf,
   type RaceDistance,
@@ -81,6 +84,13 @@ export default function HomeScreen() {
   const today = ymdOf(new Date());
   const todayLoc = plan ? locateByDate(plan, today) : undefined;
   const thisWeek = plan ? weekOf(plan, today) : undefined;
+  const eq = profile.strength?.equipment ?? 'bodyweight';
+  const spw = profile.strength?.sessionsPerWeek ?? 2;
+  const todayDow = todayLoc?.scheduled.dayOfWeek ?? new Date().getDay();
+  const todayStrength = thisWeek ? strengthOnDay(thisWeek, eq, spw, todayDow) : undefined;
+  const weekStrengthDays = thisWeek
+    ? new Set(strengthScheduleForWeek(thisWeek, eq, spw).map((s) => s.dayOfWeek))
+    : new Set<number>();
 
   async function onSyncPush() {
     try {
@@ -159,6 +169,13 @@ export default function HomeScreen() {
               {todayLoc ? 'Ruhetag – Erholung zählt auch. 🌙' : 'Heute kein geplantes Training.'}
             </Text>
           )}
+          {todayStrength && (
+            <Pressable onPress={() => router.push('/strength')} hitSlop={6}>
+              <Text style={[styles.todayStrength, { color: p.accent }]}>
+                + Kraft: {kindLabel(todayStrength.kind)} ›
+              </Text>
+            </Pressable>
+          )}
         </View>
 
         {/* Diese Woche */}
@@ -193,6 +210,9 @@ export default function HomeScreen() {
                     <Text style={[styles.woName, { color: p.text }]} numberOfLines={1}>
                       {sw.workout.name}
                     </Text>
+                    {weekStrengthDays.has(sw.dayOfWeek) && (
+                      <Text style={[styles.kraftTag, { color: p.accent, borderColor: p.accent }]}>Kraft</Text>
+                    )}
                     <Text style={[styles.woDist, { color: p.subtext }]}>
                       {formatDistance(sw.workout.estimatedDistanceMeters ?? 0)}
                     </Text>
@@ -327,7 +347,9 @@ const styles = StyleSheet.create({
   updateLink: { fontSize: 14, fontWeight: '600', marginTop: 12 },
   sectionTitle: { fontSize: 18, fontWeight: '700', marginTop: 4 },
   todaySub: { fontSize: 14, fontWeight: '600', marginTop: 4 },
+  todayStrength: { fontSize: 14, fontWeight: '700', marginTop: 8 },
   todayRest: { fontSize: 16, marginTop: 4 },
+  kraftTag: { fontSize: 11, fontWeight: '700', borderWidth: 1, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 1, overflow: 'hidden' },
   weekHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 },
   badge: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
   badgeText: { color: '#fff', fontSize: 12, fontWeight: '700' },
