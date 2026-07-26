@@ -5,9 +5,9 @@ import { vdotFromRace } from './formulas';
 // Priorität: echte Bestzeit > direkte VDOT-Schätzung > Selbsteinschätzung.
 
 const LEVEL_VDOT: Record<SelfRatedLevel, number> = {
-  beginner: 35,
-  intermediate: 45,
-  advanced: 55,
+  beginner: 32,
+  intermediate: 42,
+  advanced: 50,
 };
 
 /** Konservativer Default, falls gar keine Angabe vorliegt. */

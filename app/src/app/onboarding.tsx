@@ -284,7 +284,8 @@ export default function Onboarding() {
                 <Text style={[styles.previewLabel, { color: p.subtext }]}>Geschätzte VDOT</Text>
                 <Text style={[styles.previewVdot, { color: p.accent }]}>{previewVdot}</Text>
                 <Text style={[styles.previewPace, { color: p.text }]}>
-                  Schwellen-Pace ~ {paceMpsToPerKm(zonePaceMps(previewVdot, 'threshold').highMps)} /km
+                  Lockere Läufe ~ {paceMpsToPerKm(zonePaceMps(previewVdot, 'easy').highMps)}–
+                  {paceMpsToPerKm(zonePaceMps(previewVdot, 'easy').lowMps)} /km
                 </Text>
               </View>
             )}
