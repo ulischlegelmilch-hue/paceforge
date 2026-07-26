@@ -22,6 +22,14 @@ npm run dev --workspace @paceforge/server                          # nur Regeln
 
 Port via `PORT` (Default 8787).
 
+## Deploy (Render)
+
+`render.yaml` (im Repo-Root) ist ein Blueprint: in render.com „New +" → „Blueprint" →
+dieses Repo. Deploy läuft vom Monorepo-Root (damit die Workspaces installiert werden),
+Start = `npm start --workspace @paceforge/server`, Health-Check `/healthz`.
+`ANTHROPIC_API_KEY` optional im Dashboard setzen. Danach in der App
+`EXPO_PUBLIC_API_BASE_URL=https://<service>.onrender.com` setzen.
+
 ## Noch offen (Phase 2, gesperrt)
 
 - **Garmin Training API / OAuth-Provider** — braucht einen echten Garmin-Developer-

@@ -1,0 +1,31 @@
+# Render-Blueprint fürs PaceForge-Backend (Fastify).
+# In render.com: "New +" -> "Blueprint" -> dieses Repo wählen. Render liest diese
+# Datei und legt den Web-Service an.
+#
+# Deploy vom Monorepo-Root (nicht aus server/), damit die npm-Workspaces installiert
+# werden und @paceforge/core aufgelöst wird. Der Start-Befehl läuft den server-
+# Workspace (tsx transpiliert die geteilte TS-Kernlogik zur Laufzeit).
+#
+# Free-Tier reicht zum Loslegen (schläft nach ~15 min Inaktivität ein, für die App
+# unkritisch – Aufrufe haben immer einen lokalen Fallback).
+services:
+  - type: web
+    name: paceforge-backend
+    runtime: node
+    plan: free
+    rootDir: .
+    buildCommand: npm install
+    startCommand: npm start --workspace @paceforge/server
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      # Optional: mit Key nutzt /api/parse-goal Claude, sonst den Regel-Fallback.
+      # Im Render-Dashboard setzen (nicht committen).
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      # Optional (Phase 2, sobald Garmin-Developer-Zugang besteht):
+      - key: GARMIN_CLIENT_ID
+        sync: false
+      - key: GARMIN_CLIENT_SECRET
+        sync: false
