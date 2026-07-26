@@ -321,6 +321,9 @@ export default function HomeScreen() {
         <Pressable onPress={reset} style={styles.resetBtn}>
           <Text style={[styles.resetText, { color: p.subtext }]}>Angaben zurücksetzen</Text>
         </Pressable>
+        <Pressable onPress={() => router.push('/about')} style={styles.resetBtn}>
+          <Text style={[styles.resetText, { color: p.subtext }]}>Über & Quellen</Text>
+        </Pressable>
       </ScrollView>
     </SafeAreaView>
   );

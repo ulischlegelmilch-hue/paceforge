@@ -15,6 +15,7 @@ export default function RootLayout() {
         <Stack.Screen name="strength" />
         <Stack.Screen name="nutrition" />
         <Stack.Screen name="training" />
+        <Stack.Screen name="about" />
       </Stack>
     </>
   );
