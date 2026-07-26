@@ -24,6 +24,7 @@ interface CreateProfileInput {
   fitness: FitnessInput;
   daysPerWeek: number;
   longRunDay?: number;
+  strength?: { sessionsPerWeek: number; equipment: 'gym' | 'bodyweight' };
 }
 
 interface SnapshotInput {
@@ -70,7 +71,7 @@ export const useProfileStore = create<ProfileState>()(
   plan: null,
   activities: [],
   deviceId: makeDeviceId(),
-  createProfile: ({ goal, fitness, daysPerWeek, longRunDay }) => {
+  createProfile: ({ goal, fitness, daysPerWeek, longRunDay, strength }) => {
     const profile: AthleteProfile = {
       id: `athlete-${Date.now()}`,
       createdAt: new Date().toISOString(),
@@ -80,7 +81,7 @@ export const useProfileStore = create<ProfileState>()(
       daysPerWeek,
       longRunDay,
       units: 'metric',
-      strength: { sessionsPerWeek: 2, equipment: 'bodyweight' },
+      strength: strength ?? { sessionsPerWeek: 2, equipment: 'bodyweight' },
     };
     const plan = generatePlan(profile);
     set({ profile, plan, activities: [] });

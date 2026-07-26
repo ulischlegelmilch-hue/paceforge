@@ -10,9 +10,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
+  assessTraining,
   paceMpsToPerKm,
   vdotFromFitness,
   zonePaceMps,
+  type AdviceLevel,
   type FitnessInput,
   type Goal,
   type RaceDistance,
@@ -75,6 +77,8 @@ export default function Onboarding() {
   const [distance, setDistance] = useState<RaceDistance | null>(null);
   const [weeks, setWeeks] = useState<number | null>(null);
   const [days, setDays] = useState<number | null>(null);
+  const [strengthSessions, setStrengthSessions] = useState(2);
+  const [strengthEquipment, setStrengthEquipment] = useState<'gym' | 'bodyweight'>('bodyweight');
   const [targetTimeSeconds, setTargetTimeSeconds] = useState<number | null>(null);
 
   const [quickText, setQuickText] = useState('');
@@ -126,17 +130,23 @@ export default function Onboarding() {
 
   const previewVdot = fitness ? Math.round(vdotFromFitness(fitness) * 10) / 10 : null;
 
-  const steps = ['Ziel', 'Zeitrahmen', 'Fitness', 'Tage'];
+  const steps = ['Ziel', 'Zeitrahmen', 'Fitness', 'Tage', 'Kraft'];
   const canNext =
     (step === 0 && distance !== null) ||
     (step === 1 && weeks !== null) ||
     (step === 2 && fitness !== null) ||
-    (step === 3 && days !== null);
+    (step === 3 && days !== null) ||
+    step === 4;
 
   function finish() {
     if (!distance || !weeks || !days || !fitness) return;
     const goal: Goal = { distance, weeks, ...(targetTimeSeconds ? { targetTimeSeconds } : {}) };
-    createProfile({ goal, fitness, daysPerWeek: days });
+    createProfile({
+      goal,
+      fitness,
+      daysPerWeek: days,
+      strength: { sessionsPerWeek: strengthSessions, equipment: strengthEquipment },
+    });
     router.replace('/');
   }
 
@@ -147,6 +157,9 @@ export default function Onboarding() {
   function onBack() {
     if (step > 0) setStep(step - 1);
     else router.back();
+  }
+  function levelColor(l: AdviceLevel): string {
+    return l === 'good' ? '#16a34a' : l === 'warn' ? '#d97706' : p.accent;
   }
 
   return (
@@ -288,6 +301,41 @@ export default function Onboarding() {
             </View>
           </>
         )}
+
+        {step === 4 && (
+          <>
+            <Text style={[styles.q, { color: p.text }]}>Krafttraining dazu?</Text>
+            <Text style={[styles.subLabel, { color: p.subtext }]}>Einheiten pro Woche (2× empfohlen)</Text>
+            <View style={styles.chipWrap}>
+              {[0, 1, 2, 3].map((n) => (
+                <Chip
+                  key={n}
+                  label={n === 0 ? 'Aus' : `${n}×`}
+                  selected={strengthSessions === n}
+                  onPress={() => setStrengthSessions(n)}
+                  p={p}
+                />
+              ))}
+            </View>
+            <Text style={[styles.subLabel, { color: p.subtext }]}>Ausrüstung</Text>
+            <View style={styles.chipWrap}>
+              <Chip label="Studio / Gewichte" selected={strengthEquipment === 'gym'} onPress={() => setStrengthEquipment('gym')} p={p} />
+              <Chip label="Körpergewicht" selected={strengthEquipment === 'bodyweight'} onPress={() => setStrengthEquipment('bodyweight')} p={p} />
+            </View>
+
+            {distance && days && (
+              <View style={[styles.preview, { backgroundColor: p.card, borderColor: p.border }]}>
+                <Text style={[styles.previewLabel, { color: p.subtext }]}>Reicht das für dein Ziel?</Text>
+                {assessTraining({ distance, daysPerWeek: days, strengthPerWeek: strengthSessions }).advice.map((a, i) => (
+                  <View key={i} style={styles.adviceRow}>
+                    <View style={[styles.adviceDot, { backgroundColor: levelColor(a.level) }]} />
+                    <Text style={[styles.adviceText, { color: p.text }]}>{a.text}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </>
+        )}
       </ScrollView>
 
       {/* Navigation */}
@@ -318,6 +366,9 @@ const styles = StyleSheet.create({
   scroll: { padding: 24, gap: 18 },
   q: { fontSize: 23, fontWeight: '700', lineHeight: 30 },
   subLabel: { fontSize: 13, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.4 },
+  adviceRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', marginTop: 8, alignSelf: 'stretch' },
+  adviceDot: { width: 8, height: 8, borderRadius: 4, marginTop: 6 },
+  adviceText: { flex: 1, fontSize: 14, lineHeight: 20 },
   quickCard: { borderRadius: 14, borderWidth: 1, padding: 14, gap: 10 },
   quickInput: { borderWidth: 1, borderRadius: 10, padding: 12, fontSize: 15, minHeight: 64, textAlignVertical: 'top' },
   quickBtn: { borderWidth: 1.5, borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
