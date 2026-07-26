@@ -1,11 +1,13 @@
+import { useState } from 'react';
 import { useRouter } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { strengthScheduleForWeek } from '@paceforge/core';
 
 import { usePalette } from '@/ui/colors';
 import { DOW_SHORT, formatDistance, phaseColor, phaseLabel } from '@/ui/format';
 import { useProfileStore } from '@/store/profile';
+import { exportPlanIcs } from '@/delivery/exportPlanIcs';
 
 export default function PlanScreen() {
   const p = usePalette();
@@ -14,6 +16,19 @@ export default function PlanScreen() {
   const profile = useProfileStore((s) => s.profile);
   const eq = profile?.strength?.equipment ?? 'bodyweight';
   const spw = profile?.strength?.sessionsPerWeek ?? 2;
+  const [icsBusy, setIcsBusy] = useState(false);
+
+  async function onExportIcs() {
+    if (!plan) return;
+    try {
+      setIcsBusy(true);
+      await exportPlanIcs(plan, { equipment: eq, sessionsPerWeek: spw });
+    } catch (e) {
+      Alert.alert('Export fehlgeschlagen', e instanceof Error ? e.message : 'Unbekannter Fehler.');
+    } finally {
+      setIcsBusy(false);
+    }
+  }
 
   if (!plan) {
     return (
@@ -36,6 +51,17 @@ export default function PlanScreen() {
         </Pressable>
         <Text style={[styles.title, { color: p.text }]}>Dein Trainingsplan</Text>
         <Text style={[styles.sub, { color: p.subtext }]}>{plan.weeks.length} Wochen</Text>
+        <Pressable
+          onPress={onExportIcs}
+          disabled={icsBusy}
+          style={({ pressed }) => [styles.icsBtn, { borderColor: p.accent, opacity: pressed || icsBusy ? 0.6 : 1 }]}
+        >
+          {icsBusy ? (
+            <ActivityIndicator color={p.accent} />
+          ) : (
+            <Text style={[styles.icsText, { color: p.accent }]}>📅 In Kalender exportieren (.ics)</Text>
+          )}
+        </Pressable>
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll}>
@@ -104,6 +130,8 @@ const styles = StyleSheet.create({
   woName: { flex: 1, fontSize: 15, fontWeight: '600' },
   woDist: { fontSize: 14, fontVariant: ['tabular-nums'] },
   kraftTag: { fontSize: 11, fontWeight: '700', borderWidth: 1, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 1, overflow: 'hidden' },
+  icsBtn: { marginTop: 10, borderWidth: 1.5, borderRadius: 12, paddingVertical: 12, alignItems: 'center', minHeight: 44, justifyContent: 'center' },
+  icsText: { fontSize: 15, fontWeight: '700' },
   empty: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 16, padding: 24 },
   emptyText: { fontSize: 16 },
   cta: { borderRadius: 14, paddingVertical: 14, paddingHorizontal: 22 },

@@ -33,5 +33,8 @@ export * from './nutrition/index';
 // Trainingsumfang-Bewertung / Coaching-Tipps
 export * from './advice/index';
 
+// Kalender-Export (.ics)
+export * from './calendar/ics';
+
 // Utilities
 export * from './util/pace';
