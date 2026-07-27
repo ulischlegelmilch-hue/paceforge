@@ -237,7 +237,7 @@ export default function Onboarding() {
                 <Text style={[styles.previewPace, { color: p.text }]}>
                   Fortlaufender Plan, der deine Fitness hält – ohne Wettkampf.
                 </Text>
-                <Text style={[styles.subLabel, { color: p.subtext, marginTop: 6 }]}>
+                <Text style={[styles.subLabel, { color: p.subtext, marginTop: 6, textTransform: 'none', letterSpacing: 0 }]}>
                   Rollierender Wochenrhythmus: 1 Long Run + 1 Qualitätseinheit + lockere Läufe,
                   ~80/20 leicht/hart. Für Läufer:innen mit vorhandener Grundlage (etwa
                   halbmarathon-fähig). Intensität – nicht Umfang – erhält die Form.
