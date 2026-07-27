@@ -3,6 +3,7 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 import {
   applyAdaptation as applyAdaptationCore,
   generatePlan,
+  gradeAdjustedDistance,
   vdotFromFitness,
   vdotFromRace,
   type AdaptationResult,
@@ -43,7 +44,11 @@ interface ProfileState {
   addActivity: (activity: CompletedActivity) => void;
   applyAdaptation: (result: AdaptationResult) => void;
   /** Fitness aus einer neuen Bestzeit/Testleistung neu berechnen (VDOT + Plan). */
-  updateFitnessFromRace: (input: { distanceMeters: number; timeSeconds: number }) => void;
+  updateFitnessFromRace: (input: {
+    distanceMeters: number;
+    timeSeconds: number;
+    ascentMeters?: number;
+  }) => void;
   setStrengthEquipment: (equipment: 'gym' | 'bodyweight') => void;
   setStrengthSessions: (sessionsPerWeek: number) => void;
   setDaysPerWeek: (daysPerWeek: number) => void;
@@ -93,14 +98,18 @@ export const useProfileStore = create<ProfileState>()(
       if (!s.profile || !s.plan) return s;
       return applyAdaptationCore(s.profile, s.plan, result);
     }),
-  updateFitnessFromRace: ({ distanceMeters, timeSeconds }) =>
+  updateFitnessFromRace: ({ distanceMeters, timeSeconds, ascentMeters }) =>
     set((s) => {
       if (!s.profile) return s;
-      const currentVdot = Math.round(vdotFromRace(distanceMeters, timeSeconds) * 10) / 10;
+      const eq = gradeAdjustedDistance(distanceMeters, ascentMeters ?? 0);
+      const currentVdot = Math.round(vdotFromRace(eq, timeSeconds) * 10) / 10;
       const profile: AthleteProfile = {
         ...s.profile,
         currentVdot,
-        fitness: { ...s.profile.fitness, recentRace: { distanceMeters, timeSeconds } },
+        fitness: {
+          ...s.profile.fitness,
+          recentRace: { distanceMeters, timeSeconds, ...(ascentMeters ? { ascentMeters } : {}) },
+        },
       };
       // Plan mit den neuen Pace-Zonen neu generieren, Startdatum erhalten.
       const startIso = s.plan?.weeks[0]?.workouts[0]?.date;

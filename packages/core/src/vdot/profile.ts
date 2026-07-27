@@ -1,5 +1,6 @@
 import type { FitnessInput, SelfRatedLevel } from '../domain/athlete';
 import { vdotFromRace } from './formulas';
+import { gradeAdjustedDistance } from '../grade/index';
 
 // Ableitung der Start-VDOT aus der Onboarding-Fitness-Eingabe.
 // Priorität: echte Bestzeit > direkte VDOT-Schätzung > Selbsteinschätzung.
@@ -16,7 +17,11 @@ export const DEFAULT_VDOT = 40;
 
 export function vdotFromFitness(fitness: FitnessInput): number {
   if (fitness.recentRace) {
-    return vdotFromRace(fitness.recentRace.distanceMeters, fitness.recentRace.timeSeconds);
+    const eq = gradeAdjustedDistance(
+      fitness.recentRace.distanceMeters,
+      fitness.recentRace.ascentMeters ?? 0,
+    );
+    return vdotFromRace(eq, fitness.recentRace.timeSeconds);
   }
   if (typeof fitness.estimatedVdot === 'number') {
     return fitness.estimatedVdot;

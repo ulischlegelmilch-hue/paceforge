@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { paceMpsToPerKm, vdotFromRace, zonePaceMps } from '@paceforge/core';
+import { gradeAdjustedDistance, paceMpsToPerKm, vdotFromRace, zonePaceMps } from '@paceforge/core';
 
 import { usePalette, type Palette } from '@/ui/colors';
 import { useProfileStore } from '@/store/profile';
@@ -38,6 +38,8 @@ export default function RecalibrateScreen() {
   const [h, setH] = useState('');
   const [m, setM] = useState('');
   const [sec, setSec] = useState('');
+  const [ascent, setAscent] = useState('');
+  const ascentNum = ascent === '' ? 0 : parseInt(ascent, 10);
 
   const timeSeconds = useMemo(() => {
     const hh = h === '' ? 0 : parseInt(h, 10);
@@ -47,11 +49,18 @@ export default function RecalibrateScreen() {
     return hh * 3600 + mm * 60 + ss;
   }, [h, m, sec]);
 
-  const newVdot = timeSeconds > 0 ? Math.round(vdotFromRace(meters, timeSeconds) * 10) / 10 : null;
+  const newVdot =
+    timeSeconds > 0
+      ? Math.round(vdotFromRace(gradeAdjustedDistance(meters, ascentNum), timeSeconds) * 10) / 10
+      : null;
 
   function apply() {
     if (timeSeconds <= 0) return;
-    updateFitnessFromRace({ distanceMeters: meters, timeSeconds });
+    updateFitnessFromRace({
+      distanceMeters: meters,
+      timeSeconds,
+      ...(Number.isFinite(ascentNum) && ascentNum > 0 ? { ascentMeters: ascentNum } : {}),
+    });
     router.back();
   }
 
@@ -93,6 +102,16 @@ export default function RecalibrateScreen() {
           <Text style={[styles.colon, { color: p.text }]}>:</Text>
           {numField(sec, setSec, 'ss', 2)}
         </View>
+
+        <Text style={[styles.label, { color: p.subtext }]}>Höhenmeter (optional)</Text>
+        <TextInput
+          value={ascent}
+          onChangeText={(t) => setAscent(t.replace(/[^0-9]/g, '').slice(0, 4))}
+          keyboardType="number-pad"
+          placeholder="z. B. 40"
+          placeholderTextColor={p.subtext}
+          style={[styles.timeInput, { color: p.text, backgroundColor: p.card, borderColor: p.border, width: 110 }]}
+        />
 
         {newVdot != null && (
           <View style={[styles.preview, { backgroundColor: p.card, borderColor: p.border }]}>

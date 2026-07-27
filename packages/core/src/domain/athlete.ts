@@ -19,8 +19,8 @@ export type SelfRatedLevel = 'beginner' | 'intermediate' | 'advanced';
 
 /** Eingabe zur Ableitung der Start-VDOT. Genau eine Quelle genügt. */
 export interface FitnessInput {
-  /** Beste Quelle: eine kürzliche Wettkampf-/Testleistung. */
-  recentRace?: { distanceMeters: number; timeSeconds: number };
+  /** Beste Quelle: eine kürzliche Wettkampf-/Testleistung (optional mit Höhenmetern). */
+  recentRace?: { distanceMeters: number; timeSeconds: number; ascentMeters?: number };
   /** Alternativ: direkt geschätzte VDOT. */
   estimatedVdot?: number;
   /** Fallback: grobe Selbsteinschätzung. */

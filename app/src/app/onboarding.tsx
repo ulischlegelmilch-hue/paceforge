@@ -112,9 +112,10 @@ export default function Onboarding() {
   }
 
   const [fitnessMode, setFitnessMode] = useState<FitnessMode>('race');
-  const [raceMeters, setRaceMeters] = useState<number>(5000);
+  const [raceMeters, setRaceMeters] = useState<number>(3000);
   const [raceMin, setRaceMin] = useState('');
   const [raceSec, setRaceSec] = useState('');
+  const [raceAscent, setRaceAscent] = useState('');
   const [level, setLevel] = useState<SelfRatedLevel | null>(null);
 
   // Aus der aktuellen Fitness-Eingabe eine FitnessInput bauen (falls valide).
@@ -123,10 +124,17 @@ export default function Onboarding() {
       const m = parseInt(raceMin, 10);
       const s = raceSec === '' ? 0 : parseInt(raceSec, 10);
       if (!Number.isFinite(m) || m <= 0 || !Number.isFinite(s) || s < 0 || s >= 60) return null;
-      return { recentRace: { distanceMeters: raceMeters, timeSeconds: m * 60 + s } };
+      const ascent = raceAscent === '' ? 0 : parseInt(raceAscent, 10);
+      return {
+        recentRace: {
+          distanceMeters: raceMeters,
+          timeSeconds: m * 60 + s,
+          ...(Number.isFinite(ascent) && ascent > 0 ? { ascentMeters: ascent } : {}),
+        },
+      };
     }
     return level ? { selfRatedLevel: level } : null;
-  }, [fitnessMode, raceMin, raceSec, raceMeters, level]);
+  }, [fitnessMode, raceMin, raceSec, raceAscent, raceMeters, level]);
 
   const previewVdot = fitness ? Math.round(vdotFromFitness(fitness) * 10) / 10 : null;
 
@@ -238,15 +246,19 @@ export default function Onboarding() {
         {step === 2 && (
           <>
             <Text style={[styles.q, { color: p.text }]}>Wie fit bist du gerade?</Text>
+            <Text style={[styles.subLabel, { color: p.subtext }]}>
+              Am genauesten: ein kurzer Testlauf (~3 km locker-zügig) oder dein letzter Lauf.
+            </Text>
             <View style={styles.chipWrap}>
-              <Chip label="Ich kenne eine Bestzeit" selected={fitnessMode === 'race'} onPress={() => setFitnessMode('race')} p={p} />
-              <Chip label="Grobe Einschätzung" selected={fitnessMode === 'level'} onPress={() => setFitnessMode('level')} p={p} />
+              <Chip label="Testlauf / letzter Lauf" selected={fitnessMode === 'race'} onPress={() => setFitnessMode('race')} p={p} />
+              <Chip label="Nur grob einschätzen" selected={fitnessMode === 'level'} onPress={() => setFitnessMode('level')} p={p} />
             </View>
 
             {fitnessMode === 'race' ? (
               <View style={{ gap: 14, marginTop: 6 }}>
-                <Text style={[styles.subLabel, { color: p.subtext }]}>Distanz der Bestzeit</Text>
+                <Text style={[styles.subLabel, { color: p.subtext }]}>Distanz</Text>
                 <View style={styles.chipWrap}>
+                  <Chip label="3 km" selected={raceMeters === 3000} onPress={() => setRaceMeters(3000)} p={p} />
                   <Chip label="5 km" selected={raceMeters === 5000} onPress={() => setRaceMeters(5000)} p={p} />
                   <Chip label="10 km" selected={raceMeters === 10000} onPress={() => setRaceMeters(10000)} p={p} />
                 </View>
@@ -270,6 +282,15 @@ export default function Onboarding() {
                     style={[styles.timeInput, { color: p.text, backgroundColor: p.card, borderColor: p.border }]}
                   />
                 </View>
+                <Text style={[styles.subLabel, { color: p.subtext }]}>Höhenmeter (optional)</Text>
+                <TextInput
+                  value={raceAscent}
+                  onChangeText={(t) => setRaceAscent(t.replace(/[^0-9]/g, '').slice(0, 4))}
+                  keyboardType="number-pad"
+                  placeholder="z. B. 40"
+                  placeholderTextColor={p.subtext}
+                  style={[styles.timeInput, { color: p.text, backgroundColor: p.card, borderColor: p.border, width: 110 }]}
+                />
               </View>
             ) : (
               <View style={styles.chipWrap}>
