@@ -10,6 +10,7 @@ import {
   makeRest,
   makeTempo,
 } from './workouts';
+import { generateMaintenancePlan } from './maintenance';
 
 // Regelbasierter Plan-Generator (KEIN LLM). Periodisierung base -> build -> peak
 // -> taper; jede Woche folgt einem Tages-Template mit 1 Long Run + 1–2 Qualitäts-
@@ -117,6 +118,7 @@ function qualityForPhase(phase: PlanPhase): QualityPlan {
         q2: (id, v) => makeRepetitions(id, v, 8, 200, 200),
       };
     case 'taper':
+    case 'maintenance':
       return {
         q1: (id, v) => makeTempo(id, v, 15),
         q2: (id, v) => makeEasyRun(id, v, 6000),
@@ -133,6 +135,7 @@ function easyMetersForPhase(phase: PlanPhase): number {
     case 'peak':
       return 7000;
     case 'taper':
+    case 'maintenance':
       return 6000;
   }
 }
@@ -176,6 +179,10 @@ export interface GenerateOptions {
 }
 
 export function generatePlan(profile: AthleteProfile, options: GenerateOptions = {}): TrainingPlan {
+  // Ohne Wettkampf: fortlaufender Erhaltungs-Rhythmus statt periodisiertem Plan.
+  if (profile.goal.mode === 'maintain') {
+    return generateMaintenancePlan(profile, options);
+  }
   const totalWeeks = resolveWeeks(profile);
   const phases = phaseSequence(totalWeeks);
   const taperCount = phases.filter((p) => p === 'taper').length;

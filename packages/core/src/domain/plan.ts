@@ -12,7 +12,7 @@ export interface ScheduledWorkout {
   completedActivityId?: string;
 }
 
-export type PlanPhase = 'base' | 'build' | 'peak' | 'taper';
+export type PlanPhase = 'base' | 'build' | 'peak' | 'taper' | 'maintenance';
 
 export interface PlanWeek {
   index: number;                      // 0-basiert

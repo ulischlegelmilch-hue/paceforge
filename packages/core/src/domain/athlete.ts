@@ -4,6 +4,13 @@
 export type RaceDistance = '5k' | '10k' | 'half' | 'marathon' | 'custom';
 
 export interface Goal {
+  /**
+   * 'race' = auf eine Zieldistanz/-zeit hintrainieren (periodisiert base→…→taper).
+   * 'maintain' = Form halten ohne Wettkampf (fortlaufender rollierender Wochenrhythmus,
+   * 80/20, 1 Qualitätseinheit/Woche; für Läufer:innen mit vorhandener Grundlage).
+   * Default: 'race'.
+   */
+  mode?: 'race' | 'maintain';
   distance: RaceDistance;
   /** Nur wenn distance === 'custom'. */
   customDistanceMeters?: number;

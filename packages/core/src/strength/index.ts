@@ -38,6 +38,9 @@ export function strengthKindForPhase(phase: PlanPhase): StrengthKind {
       return 'power';
     case 'taper':
       return 'taper';
+    case 'maintenance':
+      // Erhaltung: solides Grundlagen-Krafttraining, kein Auf-/Abbau-Zyklus.
+      return 'foundation';
   }
 }
 
