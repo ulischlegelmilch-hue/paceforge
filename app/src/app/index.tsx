@@ -128,8 +128,9 @@ export default function HomeScreen() {
         <View style={[styles.card, { backgroundColor: p.card, borderColor: p.border }]}>
           <Text style={[styles.cardLabel, { color: p.subtext }]}>Dein Ziel</Text>
           <Text style={[styles.goalText, { color: p.text }]}>
-            {DISTANCE_LABEL[profile.goal.distance]}
-            {profile.goal.weeks ? ` · ${profile.goal.weeks} Wochen` : ''}
+            {profile.goal.mode === 'maintain'
+              ? 'Form halten'
+              : `${DISTANCE_LABEL[profile.goal.distance]}${profile.goal.weeks ? ` · ${profile.goal.weeks} Wochen` : ''}`}
           </Text>
           <Text style={[styles.cardLabel, { color: p.subtext, marginTop: 14 }]}>
             Aktuelle Fitness (VDOT)
@@ -234,7 +235,7 @@ export default function HomeScreen() {
             >
               <Text style={[styles.zoneLabel, { color: p.text }]}>{ZONE_LABEL[z]}</Text>
               <Text style={[styles.zonePace, { color: p.subtext }]}>
-                {paceMpsToPerKm(zones[z].highMps)}–{paceMpsToPerKm(zones[z].lowMps)} /km
+                {paceMpsToPerKm(zones[z].lowMps)}–{paceMpsToPerKm(zones[z].highMps)} /km
               </Text>
             </View>
           ))}

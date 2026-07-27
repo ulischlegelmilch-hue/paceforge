@@ -28,7 +28,9 @@ export function durationText(d: StepDuration): string {
 }
 
 export function targetText(t: StepTarget): string {
-  if (t.type === 'pace') return `${paceMpsToPerKm(t.highMps)}–${paceMpsToPerKm(t.lowMps)} /km`;
+  // Bewusst langsames → schnelles Ende (z. B. "6:03–5:03"): locker läuft man am
+  // langsamen Ende; das schnelle Ende zuerst zu zeigen verleitet zu hohem Tempo.
+  if (t.type === 'pace') return `${paceMpsToPerKm(t.lowMps)}–${paceMpsToPerKm(t.highMps)} /km`;
   if (t.type === 'heartRate') return `${t.lowBpm}–${t.highBpm} bpm`;
   return 'frei';
 }
@@ -49,6 +51,7 @@ const PHASE: Record<PlanPhase, { label: string; color: string }> = {
   build: { label: 'Aufbau', color: '#e8622c' },
   peak: { label: 'Spitze', color: '#dc2626' },
   taper: { label: 'Tapering', color: '#16a34a' },
+  maintenance: { label: 'Erhaltung', color: '#0891b2' },
 };
 export function phaseLabel(p: PlanPhase): string {
   return PHASE[p].label;

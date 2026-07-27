@@ -74,6 +74,7 @@ export default function Onboarding() {
 
   const [step, setStep] = useState(0);
 
+  const [goalMode, setGoalMode] = useState<'race' | 'maintain'>('race');
   const [distance, setDistance] = useState<RaceDistance | null>(null);
   const [weeks, setWeeks] = useState<number | null>(null);
   const [days, setDays] = useState<number | null>(null);
@@ -138,17 +139,38 @@ export default function Onboarding() {
 
   const previewVdot = fitness ? Math.round(vdotFromFitness(fitness) * 10) / 10 : null;
 
-  const steps = ['Ziel', 'Zeitrahmen', 'Fitness', 'Tage', 'Kraft'];
+  // Schrittfolge per Schlüssel – im Erhaltungs-Modus entfällt der Zeitrahmen.
+  type StepKey = 'goal' | 'weeks' | 'fitness' | 'days' | 'strength';
+  const STEP_LABEL: Record<StepKey, string> = {
+    goal: 'Ziel',
+    weeks: 'Zeitrahmen',
+    fitness: 'Fitness',
+    days: 'Tage',
+    strength: 'Kraft',
+  };
+  const stepKeys: StepKey[] =
+    goalMode === 'maintain'
+      ? ['goal', 'fitness', 'days', 'strength']
+      : ['goal', 'weeks', 'fitness', 'days', 'strength'];
+  const currentKey = stepKeys[Math.min(step, stepKeys.length - 1)];
+
   const canNext =
-    (step === 0 && distance !== null) ||
-    (step === 1 && weeks !== null) ||
-    (step === 2 && fitness !== null) ||
-    (step === 3 && days !== null) ||
-    step === 4;
+    (currentKey === 'goal' && (goalMode === 'maintain' || distance !== null)) ||
+    (currentKey === 'weeks' && weeks !== null) ||
+    (currentKey === 'fitness' && fitness !== null) ||
+    (currentKey === 'days' && days !== null) ||
+    currentKey === 'strength';
 
   function finish() {
-    if (!distance || !weeks || !days || !fitness) return;
-    const goal: Goal = { distance, weeks, ...(targetTimeSeconds ? { targetTimeSeconds } : {}) };
+    if (!days || !fitness) return;
+    let goal: Goal;
+    if (goalMode === 'maintain') {
+      // Erhaltung: keine Zieldistanz/-zeit; 'half' dient nur als neutrale Referenz.
+      goal = { mode: 'maintain', distance: 'half' };
+    } else {
+      if (!distance || !weeks) return;
+      goal = { mode: 'race', distance, weeks, ...(targetTimeSeconds ? { targetTimeSeconds } : {}) };
+    }
     createProfile({
       goal,
       fitness,
@@ -159,7 +181,7 @@ export default function Onboarding() {
   }
 
   function onNext() {
-    if (step < steps.length - 1) setStep(step + 1);
+    if (step < stepKeys.length - 1) setStep(step + 1);
     else finish();
   }
   function onBack() {
@@ -174,8 +196,8 @@ export default function Onboarding() {
     <SafeAreaView style={[styles.fill, { backgroundColor: p.bg }]}>
       {/* Fortschritt */}
       <View style={styles.progressRow}>
-        {steps.map((label, i) => (
-          <View key={label} style={styles.progressItem}>
+        {stepKeys.map((key, i) => (
+          <View key={key} style={styles.progressItem}>
             <View
               style={[
                 styles.progressDot,
@@ -183,50 +205,78 @@ export default function Onboarding() {
               ]}
             />
             <Text style={[styles.progressLabel, { color: i <= step ? p.text : p.subtext }]}>
-              {label}
+              {STEP_LABEL[key]}
             </Text>
           </View>
         ))}
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        {step === 0 && (
+        {currentKey === 'goal' && (
           <>
-            <View style={[styles.quickCard, { backgroundColor: p.card, borderColor: p.border }]}>
-              <Text style={[styles.subLabel, { color: p.subtext }]}>Ziel in einem Satz (optional)</Text>
-              <TextInput
-                value={quickText}
-                onChangeText={setQuickText}
-                placeholder="z. B. 10k unter 45 min in 12 Wochen, 4x pro Woche"
-                placeholderTextColor={p.subtext}
-                style={[styles.quickInput, { color: p.text, borderColor: p.border }]}
-                multiline
+            <Text style={[styles.q, { color: p.text }]}>Was ist dein Ziel?</Text>
+            <View style={styles.chipWrap}>
+              <Chip
+                label="Auf ein Ziel hintrainieren"
+                selected={goalMode === 'race'}
+                onPress={() => setGoalMode('race')}
+                p={p}
               />
-              <Pressable
-                onPress={applyQuick}
-                style={[styles.quickBtn, { borderColor: p.accent }]}
-              >
-                <Text style={[styles.quickBtnText, { color: p.accent }]}>Übernehmen</Text>
-              </Pressable>
-              {quickHint && <Text style={[styles.quickHintText, { color: p.subtext }]}>{quickHint}</Text>}
+              <Chip
+                label="Nur Form halten"
+                selected={goalMode === 'maintain'}
+                onPress={() => setGoalMode('maintain')}
+                p={p}
+              />
             </View>
 
-            <Text style={[styles.q, { color: p.text }]}>Welche Distanz ist dein Ziel?</Text>
-            <View style={styles.chipWrap}>
-              {DISTANCES.map((d) => (
-                <Chip
-                  key={d.key}
-                  label={d.label}
-                  selected={distance === d.key}
-                  onPress={() => setDistance(d.key)}
-                  p={p}
-                />
-              ))}
-            </View>
+            {goalMode === 'maintain' ? (
+              <View style={[styles.quickCard, { backgroundColor: p.card, borderColor: p.border, marginTop: 6 }]}>
+                <Text style={[styles.previewPace, { color: p.text }]}>
+                  Fortlaufender Plan, der deine Fitness hält – ohne Wettkampf.
+                </Text>
+                <Text style={[styles.subLabel, { color: p.subtext, marginTop: 6 }]}>
+                  Rollierender Wochenrhythmus: 1 Long Run + 1 Qualitätseinheit + lockere Läufe,
+                  ~80/20 leicht/hart. Für Läufer:innen mit vorhandener Grundlage (etwa
+                  halbmarathon-fähig). Intensität – nicht Umfang – erhält die Form.
+                </Text>
+              </View>
+            ) : (
+              <>
+                <View style={[styles.quickCard, { backgroundColor: p.card, borderColor: p.border }]}>
+                  <Text style={[styles.subLabel, { color: p.subtext }]}>Ziel in einem Satz (optional)</Text>
+                  <TextInput
+                    value={quickText}
+                    onChangeText={setQuickText}
+                    placeholder="z. B. 10k unter 45 min in 12 Wochen, 4x pro Woche"
+                    placeholderTextColor={p.subtext}
+                    style={[styles.quickInput, { color: p.text, borderColor: p.border }]}
+                    multiline
+                  />
+                  <Pressable onPress={applyQuick} style={[styles.quickBtn, { borderColor: p.accent }]}>
+                    <Text style={[styles.quickBtnText, { color: p.accent }]}>Übernehmen</Text>
+                  </Pressable>
+                  {quickHint && <Text style={[styles.quickHintText, { color: p.subtext }]}>{quickHint}</Text>}
+                </View>
+
+                <Text style={[styles.q, { color: p.text }]}>Welche Distanz ist dein Ziel?</Text>
+                <View style={styles.chipWrap}>
+                  {DISTANCES.map((d) => (
+                    <Chip
+                      key={d.key}
+                      label={d.label}
+                      selected={distance === d.key}
+                      onPress={() => setDistance(d.key)}
+                      p={p}
+                    />
+                  ))}
+                </View>
+              </>
+            )}
           </>
         )}
 
-        {step === 1 && (
+        {currentKey === 'weeks' && (
           <>
             <Text style={[styles.q, { color: p.text }]}>Wie lange soll dein Plan laufen?</Text>
             <View style={styles.chipWrap}>
@@ -243,7 +293,7 @@ export default function Onboarding() {
           </>
         )}
 
-        {step === 2 && (
+        {currentKey === 'fitness' && (
           <>
             <Text style={[styles.q, { color: p.text }]}>Wie fit bist du gerade?</Text>
             <Text style={[styles.subLabel, { color: p.subtext }]}>
@@ -305,15 +355,15 @@ export default function Onboarding() {
                 <Text style={[styles.previewLabel, { color: p.subtext }]}>Geschätzte VDOT</Text>
                 <Text style={[styles.previewVdot, { color: p.accent }]}>{previewVdot}</Text>
                 <Text style={[styles.previewPace, { color: p.text }]}>
-                  Lockere Läufe ~ {paceMpsToPerKm(zonePaceMps(previewVdot, 'easy').highMps)}–
-                  {paceMpsToPerKm(zonePaceMps(previewVdot, 'easy').lowMps)} /km
+                  Lockere Läufe ~ {paceMpsToPerKm(zonePaceMps(previewVdot, 'easy').lowMps)}–
+                  {paceMpsToPerKm(zonePaceMps(previewVdot, 'easy').highMps)} /km
                 </Text>
               </View>
             )}
           </>
         )}
 
-        {step === 3 && (
+        {currentKey === 'days' && (
           <>
             <Text style={[styles.q, { color: p.text }]}>An wie vielen Tagen pro Woche willst du laufen?</Text>
             <View style={styles.chipWrap}>
@@ -324,7 +374,7 @@ export default function Onboarding() {
           </>
         )}
 
-        {step === 4 && (
+        {currentKey === 'strength' && (
           <>
             <Text style={[styles.q, { color: p.text }]}>Krafttraining dazu?</Text>
             <Text style={[styles.subLabel, { color: p.subtext }]}>Einheiten pro Woche (2× empfohlen)</Text>
@@ -371,7 +421,7 @@ export default function Onboarding() {
           style={[styles.navNext, { backgroundColor: canNext ? p.accent : p.border }]}
         >
           <Text style={[styles.navNextText, { color: canNext ? p.accentText : p.subtext }]}>
-            {step === steps.length - 1 ? 'Plan erstellen' : 'Weiter'}
+            {step === stepKeys.length - 1 ? 'Plan erstellen' : 'Weiter'}
           </Text>
         </Pressable>
       </View>
