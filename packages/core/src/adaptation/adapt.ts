@@ -31,9 +31,13 @@ export function compareWorkout(planned: Workout, actual: CompletedActivity): Wor
   const plannedDurationSeconds = planned.estimatedDurationSeconds ?? 0;
   const plannedAvgPaceMps = plannedDurationSeconds > 0 ? plannedDistanceMeters / plannedDurationSeconds : 0;
   // Höhenkorrigiert: ein hügeliger Lauf wird nicht faelschlich als „zu langsam" bewertet.
-  const actualDistEff = actual.totalAscentMeters
-    ? gradeAdjustedDistance(actual.totalDistanceMeters, actual.totalAscentMeters)
-    : actual.totalDistanceMeters;
+  // Bevorzugt der genauere per-Segment-Wert aus dem Höhenprofil, sonst die Totals-
+  // Näherung aus dem Gesamtanstieg, sonst die rohe Distanz.
+  const actualDistEff = actual.gradeAdjustedDistanceMeters
+    ? actual.gradeAdjustedDistanceMeters
+    : actual.totalAscentMeters
+      ? gradeAdjustedDistance(actual.totalDistanceMeters, actual.totalAscentMeters)
+      : actual.totalDistanceMeters;
   const actualAvgPaceMps =
     actual.totalDurationSeconds > 0 ? actualDistEff / actual.totalDurationSeconds : actual.avgPaceMps;
 

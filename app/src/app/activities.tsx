@@ -117,6 +117,14 @@ export default function ActivitiesScreen() {
                   {paceMpsToPerKm(a.avgPaceMps)} /km
                   {a.avgHeartRate ? ` · ⌀ ${a.avgHeartRate} bpm` : ''}
                 </Text>
+                {(a.gradeAdjustedDistanceMeters || a.totalAscentMeters) && (
+                  <Text style={[styles.matchNote, { color: p.subtext }]}>
+                    {a.totalAscentMeters ? `⛰ ${a.totalAscentMeters} Hm` : ''}
+                    {a.gradeAdjustedDistanceMeters
+                      ? `${a.totalAscentMeters ? ' · ' : ''}flach-äquiv. ${formatDistance(a.gradeAdjustedDistanceMeters)} (Bewertung höhenkorrigiert)`
+                      : ' · Bewertung höhenkorrigiert'}
+                  </Text>
+                )}
                 {matched && (
                   <Text style={[styles.matchNote, { color: p.subtext }]}>
                     geplant: {matched.workout.name}

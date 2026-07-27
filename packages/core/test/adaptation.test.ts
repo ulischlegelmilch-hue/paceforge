@@ -54,6 +54,23 @@ describe('compareWorkout', () => {
   it('bewertet zu kurze Distanz als incomplete', () => {
     expect(compareWorkout(w, activity(3000, planPace, '2026-01-06')).assessment).toBe('incomplete');
   });
+
+  it('bewertet einen hügeligen Lauf höhenkorrigiert nicht als zu langsam', () => {
+    // Real 8 km bei scheinbar 8 % langsamerer Pace, aber mit +300 Höhenmetern.
+    const slow = activity(8000, planPace * 0.92, '2026-01-06');
+    expect(compareWorkout(w, slow).assessment).toBe('slower');
+    const hilly: CompletedActivity = { ...slow, totalAscentMeters: 300 };
+    expect(compareWorkout(w, hilly).assessment).not.toBe('slower');
+  });
+
+  it('bevorzugt den genaueren per-Segment-Wert (gradeAdjustedDistanceMeters)', () => {
+    const slow = activity(8000, planPace * 0.9, '2026-01-06');
+    // per-Segment-Höhenprofil ergibt 9200 m flach-äquivalent -> Pace effektiv schneller.
+    const hilly: CompletedActivity = { ...slow, gradeAdjustedDistanceMeters: 9200 };
+    const cmp = compareWorkout(w, hilly);
+    expect(cmp.actualAvgPaceMps).toBeGreaterThan(slow.avgPaceMps);
+    expect(cmp.assessment).not.toBe('slower');
+  });
 });
 
 describe('matchActivity', () => {

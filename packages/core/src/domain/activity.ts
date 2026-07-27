@@ -20,6 +20,12 @@ export interface CompletedActivity {
   avgHeartRate?: number;
   /** Gesamtanstieg in Metern (für höhenkorrigierte Auswertung). */
   totalAscentMeters?: number;
+  /**
+   * Flach-äquivalente Distanz aus dem Höhenprofil (per-Segment, Minetti/Strava).
+   * Nur gesetzt, wenn die FIT-Records Höhendaten enthielten; genauer als die
+   * Totals-Näherung aus `totalAscentMeters`.
+   */
+  gradeAdjustedDistanceMeters?: number;
   laps?: ActivityLap[];
   /** An eine geplante Einheit gematcht (Datum), falls zugeordnet. */
   linkedScheduledWorkoutDate?: string;

@@ -1,5 +1,6 @@
 import { Decoder, Stream } from '@garmin/fitsdk';
 import type { ActivityLap, ActivitySource, CompletedActivity } from '../domain/activity';
+import { gradeAdjustedDistanceSegments, type GradeSegment } from '../grade/index';
 
 // FIT-Activity-Parser: eine vom Nutzer importierte FIT-Datei einer absolvierten
 // Einheit -> CompletedActivity. Kennzahlen bevorzugt aus der Session-Message,
@@ -20,6 +21,54 @@ function toIso(v: unknown): string {
   if (typeof v === 'string') return v;
   if (typeof v === 'number' && Number.isFinite(v)) return new Date(v).toISOString();
   return new Date(0).toISOString();
+}
+
+type RecordMesg = { distance?: unknown; altitude?: unknown; enhancedAltitude?: unknown };
+
+function finite(v: unknown): number | undefined {
+  return typeof v === 'number' && Number.isFinite(v) ? v : undefined;
+}
+function altOf(r: RecordMesg): number | undefined {
+  return finite(r.enhancedAltitude) ?? finite(r.altitude);
+}
+
+/** Fenstergröße (~30 m) zum Glätten von GPS-Höhenrauschen vor der Steigungsrechnung. */
+const SMOOTH_WINDOW_M = 30;
+
+/**
+ * Flach-äquivalente Distanz aus dem Höhenprofil der Records (bevorzugter per-
+ * Segment-Ansatz laut Recherche). Steigung wird über ~30-m-Fenster gemittelt, um
+ * GPS-Rauschen zu dämpfen; `gradeAdjustedDistanceSegments` klemmt die Steigung dann
+ * auf ±45 % und deckelt den Bergab-Kredit. `undefined`, wenn keine Höhen vorliegen.
+ */
+function gradeAdjustedFromRecords(records: RecordMesg[]): number | undefined {
+  const pts = records
+    .map((r) => ({ d: finite(r.distance), a: altOf(r) }))
+    .filter((p): p is { d: number; a: number } => p.d !== undefined && p.a !== undefined);
+  if (pts.length < 2) return undefined;
+
+  const segments: GradeSegment[] = [];
+  let accDist = 0;
+  let accAlt = 0;
+  let lastD = pts[0]!.d;
+  let lastA = pts[0]!.a;
+  for (let i = 1; i < pts.length; i++) {
+    const dd = pts[i]!.d - lastD;
+    const da = pts[i]!.a - lastA;
+    lastD = pts[i]!.d;
+    lastA = pts[i]!.a;
+    if (dd <= 0) continue; // Pause / kein Vortrieb
+    accDist += dd;
+    accAlt += da;
+    if (accDist >= SMOOTH_WINDOW_M) {
+      segments.push({ meters: accDist, grade: accAlt / accDist });
+      accDist = 0;
+      accAlt = 0;
+    }
+  }
+  if (accDist > 0) segments.push({ meters: accDist, grade: accAlt / accDist });
+  if (segments.length === 0) return undefined;
+  return Math.round(gradeAdjustedDistanceSegments(segments));
 }
 
 export function decodeActivity(bytes: Uint8Array, options: DecodeActivityOptions = {}): CompletedActivity {
@@ -57,6 +106,7 @@ export function decodeActivity(bytes: Uint8Array, options: DecodeActivityOptions
   const avgPaceMps = num(session?.avgSpeed) || totalDistanceMeters / totalDurationSeconds;
   const totalAscentMeters =
     num(session?.totalAscent) || laps.reduce((s, l) => s + num((l as { totalAscent?: number }).totalAscent), 0);
+  const gradeAdjustedDistanceMeters = gradeAdjustedFromRecords(records as RecordMesg[]);
 
   const activityLaps: ActivityLap[] = laps.map((l) => {
     const d = num(l.totalDistance);
@@ -78,6 +128,7 @@ export function decodeActivity(bytes: Uint8Array, options: DecodeActivityOptions
     avgPaceMps,
     avgHeartRate: typeof session?.avgHeartRate === 'number' ? session.avgHeartRate : undefined,
     totalAscentMeters: totalAscentMeters > 0 ? Math.round(totalAscentMeters) : undefined,
+    gradeAdjustedDistanceMeters,
     laps: activityLaps.length > 0 ? activityLaps : undefined,
   };
 }

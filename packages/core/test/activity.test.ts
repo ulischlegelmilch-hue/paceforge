@@ -30,6 +30,30 @@ function encodeActivity(opts: { withSession: boolean }): Uint8Array {
   return enc.close();
 }
 
+/** Baut eine FIT-Activity mit Höhenprofil-Records (flach hoch, dann flach). */
+function encodeWithHills(opts: { flat: boolean }): Uint8Array {
+  const enc = new Encoder();
+  const w = (mesgNum: number, f: Fields) => enc.onMesg(mesgNum, f as unknown as Mesg);
+  w(MN.FILE_ID!, { type: 'activity', manufacturer: 'development', product: 0, timeCreated: START });
+  // 20 Records à 100 m = 2000 m. Bei !flat: 500 m Anstieg auf +50 m, Rest eben.
+  let alt = 100;
+  for (let i = 0; i <= 20; i++) {
+    const distance = i * 100;
+    if (!opts.flat && i >= 5 && i < 10) alt += 10; // +10 m je 100 m = 10 % Steigung, 500 m lang
+    w(MN.RECORD!, {
+      timestamp: new Date(START.getTime() + i * 30_000),
+      distance,
+      altitude: alt,
+    });
+  }
+  w(MN.SESSION!, {
+    messageIndex: 0, startTime: START, sport: 'running', totalTimerTime: 600,
+    totalElapsedTime: 600, totalDistance: 2000, avgSpeed: 2000 / 600,
+    totalAscent: opts.flat ? 0 : 50,
+  });
+  return enc.close();
+}
+
 describe('decodeActivity', () => {
   it('liest Distanz, Zeit, Pace, HR und Laps aus der Session', () => {
     const a = decodeActivity(encodeActivity({ withSession: true }), { id: 'a1' });
@@ -54,5 +78,24 @@ describe('decodeActivity', () => {
 
   it('wirft bei Nicht-FIT-Daten', () => {
     expect(() => decodeActivity(new Uint8Array([1, 2, 3, 4]))).toThrow();
+  });
+
+  it('rechnet die flach-äquivalente Distanz per-Segment aus dem Höhenprofil', () => {
+    const hilly = decodeActivity(encodeWithHills({ flat: false }));
+    expect(hilly.totalDistanceMeters).toBe(2000);
+    // 500 m mit +10 % kosten deutlich mehr -> flach-äquivalent klar über 2000 m.
+    expect(hilly.gradeAdjustedDistanceMeters).toBeGreaterThan(2000);
+    expect(hilly.gradeAdjustedDistanceMeters).toBeLessThan(2400);
+  });
+
+  it('setzt bei ebenem Profil kein nennenswertes Grade-Adjustment', () => {
+    const flat = decodeActivity(encodeWithHills({ flat: true }));
+    expect(flat.gradeAdjustedDistanceMeters).toBeGreaterThanOrEqual(1990);
+    expect(flat.gradeAdjustedDistanceMeters).toBeLessThanOrEqual(2010);
+  });
+
+  it('lässt gradeAdjustedDistanceMeters ohne Höhen-Records offen', () => {
+    const a = decodeActivity(encodeActivity({ withSession: true }));
+    expect(a.gradeAdjustedDistanceMeters).toBeUndefined();
   });
 });
