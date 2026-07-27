@@ -4,6 +4,7 @@ import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   allZones,
+  assessDetraining,
   kindLabel,
   locateByDate,
   paceMpsToPerKm,
@@ -91,6 +92,8 @@ export default function HomeScreen() {
   const weekStrengthDays = thisWeek
     ? new Set(strengthScheduleForWeek(thisWeek, eq, spw).map((s) => s.dayOfWeek))
     : new Set<number>();
+  const detraining = assessDetraining(activities);
+  const detrainingColor = detraining?.level === 'warn' ? '#d97706' : p.accent;
 
   async function onSyncPush() {
     try {
@@ -146,6 +149,16 @@ export default function HomeScreen() {
             <Text style={[styles.updateLink, { color: p.accent }]}>Trainingsumfang & Tipps ›</Text>
           </Pressable>
         </View>
+
+        {/* Detraining-Hinweis (nur mit Lauf-Historie) */}
+        {detraining && (
+          <View style={[styles.card, { backgroundColor: p.card, borderColor: detrainingColor }]}>
+            <Text style={[styles.cardLabel, { color: detrainingColor }]}>
+              {detraining.level === 'warn' ? 'Form in Gefahr' : 'Trainingsreiz niedrig'}
+            </Text>
+            <Text style={[styles.todaySub, { color: p.text, marginTop: 4 }]}>{detraining.text}</Text>
+          </View>
+        )}
 
         {/* Heute */}
         <View style={[styles.card, { backgroundColor: p.card, borderColor: p.border }]}>

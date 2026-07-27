@@ -65,7 +65,7 @@ const LEVELS: { key: SelfRatedLevel; label: string }[] = [
   { key: 'advanced', label: 'Ambitioniert' },
 ];
 
-type FitnessMode = 'race' | 'level';
+type FitnessMode = 'cooper' | 'race' | 'level';
 
 export default function Onboarding() {
   const p = usePalette();
@@ -112,7 +112,8 @@ export default function Onboarding() {
     );
   }
 
-  const [fitnessMode, setFitnessMode] = useState<FitnessMode>('race');
+  const [fitnessMode, setFitnessMode] = useState<FitnessMode>('cooper');
+  const [cooperMeters, setCooperMeters] = useState('');
   const [raceMeters, setRaceMeters] = useState<number>(3000);
   const [raceMin, setRaceMin] = useState('');
   const [raceSec, setRaceSec] = useState('');
@@ -121,21 +122,22 @@ export default function Onboarding() {
 
   // Aus der aktuellen Fitness-Eingabe eine FitnessInput bauen (falls valide).
   const fitness: FitnessInput | null = useMemo(() => {
+    const ascent = raceAscent === '' ? 0 : parseInt(raceAscent, 10);
+    const ascentField = Number.isFinite(ascent) && ascent > 0 ? { ascentMeters: ascent } : {};
+    if (fitnessMode === 'cooper') {
+      // 12-Min-Cooper-Test = Rennen mit fester Zeit 12:00, variabler Distanz.
+      const d = parseInt(cooperMeters, 10);
+      if (!Number.isFinite(d) || d < 1000 || d > 6000) return null;
+      return { recentRace: { distanceMeters: d, timeSeconds: 720, ...ascentField } };
+    }
     if (fitnessMode === 'race') {
       const m = parseInt(raceMin, 10);
       const s = raceSec === '' ? 0 : parseInt(raceSec, 10);
       if (!Number.isFinite(m) || m <= 0 || !Number.isFinite(s) || s < 0 || s >= 60) return null;
-      const ascent = raceAscent === '' ? 0 : parseInt(raceAscent, 10);
-      return {
-        recentRace: {
-          distanceMeters: raceMeters,
-          timeSeconds: m * 60 + s,
-          ...(Number.isFinite(ascent) && ascent > 0 ? { ascentMeters: ascent } : {}),
-        },
-      };
+      return { recentRace: { distanceMeters: raceMeters, timeSeconds: m * 60 + s, ...ascentField } };
     }
     return level ? { selfRatedLevel: level } : null;
-  }, [fitnessMode, raceMin, raceSec, raceAscent, raceMeters, level]);
+  }, [fitnessMode, cooperMeters, raceMin, raceSec, raceAscent, raceMeters, level]);
 
   const previewVdot = fitness ? Math.round(vdotFromFitness(fitness) * 10) / 10 : null;
 
@@ -295,16 +297,50 @@ export default function Onboarding() {
 
         {currentKey === 'fitness' && (
           <>
-            <Text style={[styles.q, { color: p.text }]}>Wie fit bist du gerade?</Text>
-            <Text style={[styles.subLabel, { color: p.subtext }]}>
-              Am genauesten: ein kurzer Testlauf (~3 km locker-zügig) oder dein letzter Lauf.
+            <Text style={[styles.q, { color: p.text }]}>Machen wir einen kurzen Einstiegslauf</Text>
+            <Text style={[styles.subLabel, { color: p.subtext, textTransform: 'none', letterSpacing: 0 }]}>
+              Ein echter Testlauf kalibriert dein Training viel zuverlässiger als eine Selbst-
+              einschätzung. Wähle, was für dich passt:
             </Text>
             <View style={styles.chipWrap}>
+              <Chip label="12-Minuten-Test" selected={fitnessMode === 'cooper'} onPress={() => setFitnessMode('cooper')} p={p} />
               <Chip label="Testlauf / letzter Lauf" selected={fitnessMode === 'race'} onPress={() => setFitnessMode('race')} p={p} />
-              <Chip label="Nur grob einschätzen" selected={fitnessMode === 'level'} onPress={() => setFitnessMode('level')} p={p} />
+              <Chip label="Nur grob schätzen" selected={fitnessMode === 'level'} onPress={() => setFitnessMode('level')} p={p} />
             </View>
 
-            {fitnessMode === 'race' ? (
+            {fitnessMode === 'cooper' && (
+              <View style={{ gap: 14, marginTop: 6 }}>
+                <View style={[styles.quickCard, { backgroundColor: p.card, borderColor: p.border }]}>
+                  <Text style={[styles.previewPace, { color: p.text }]}>
+                    Lauf 12 Minuten so weit du kannst.
+                  </Text>
+                  <Text style={[styles.subLabel, { color: p.subtext, textTransform: 'none', letterSpacing: 0, marginTop: 4 }]}>
+                    Kurz locker einlaufen, dann 12 Minuten gleichmäßig zügig (nicht Sprint). Am besten
+                    auf flacher Runde oder Bahn. Danach die gelaufene Distanz eintragen.
+                  </Text>
+                </View>
+                <Text style={[styles.subLabel, { color: p.subtext }]}>Gelaufene Distanz in Metern</Text>
+                <TextInput
+                  value={cooperMeters}
+                  onChangeText={(t) => setCooperMeters(t.replace(/[^0-9]/g, '').slice(0, 4))}
+                  keyboardType="number-pad"
+                  placeholder="z. B. 2400"
+                  placeholderTextColor={p.subtext}
+                  style={[styles.timeInput, { color: p.text, backgroundColor: p.card, borderColor: p.border, width: 140 }]}
+                />
+                <Text style={[styles.subLabel, { color: p.subtext }]}>Höhenmeter (optional)</Text>
+                <TextInput
+                  value={raceAscent}
+                  onChangeText={(t) => setRaceAscent(t.replace(/[^0-9]/g, '').slice(0, 4))}
+                  keyboardType="number-pad"
+                  placeholder="z. B. 15"
+                  placeholderTextColor={p.subtext}
+                  style={[styles.timeInput, { color: p.text, backgroundColor: p.card, borderColor: p.border, width: 110 }]}
+                />
+              </View>
+            )}
+
+            {fitnessMode === 'race' && (
               <View style={{ gap: 14, marginTop: 6 }}>
                 <Text style={[styles.subLabel, { color: p.subtext }]}>Distanz</Text>
                 <View style={styles.chipWrap}>
@@ -342,7 +378,9 @@ export default function Onboarding() {
                   style={[styles.timeInput, { color: p.text, backgroundColor: p.card, borderColor: p.border, width: 110 }]}
                 />
               </View>
-            ) : (
+            )}
+
+            {fitnessMode === 'level' && (
               <View style={styles.chipWrap}>
                 {LEVELS.map((l) => (
                   <Chip key={l.key} label={l.label} selected={level === l.key} onPress={() => setLevel(l.key)} p={p} />

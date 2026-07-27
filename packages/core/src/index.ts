@@ -33,6 +33,7 @@ export * from './nutrition/index';
 
 // Trainingsumfang-Bewertung / Coaching-Tipps
 export * from './advice/index';
+export * from './advice/detraining';
 
 // Kalender-Export (.ics)
 export * from './calendar/ics';
