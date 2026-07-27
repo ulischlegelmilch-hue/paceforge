@@ -2,6 +2,7 @@
   "expo": {
     "name": "PaceForge",
     "slug": "paceforge",
+    "owner": "hag1711",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -11,6 +12,7 @@
       "icon": "./assets/expo.icon"
     },
     "android": {
+      "package": "com.paceforge.app",
       "adaptiveIcon": {
         "backgroundColor": "#e8622c",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -39,6 +41,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "2502d7aa-cfc7-4a13-85d0-f6aa870321f4"
+      }
     }
   }
 }
