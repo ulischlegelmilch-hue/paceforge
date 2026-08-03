@@ -1,6 +1,5 @@
-import { useState } from 'react';
 import { useRouter } from 'expo-router';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   allZones,
@@ -19,10 +18,8 @@ import {
 } from '@paceforge/core';
 
 import { usePalette } from '@/ui/colors';
-import { DOW_SHORT, formatDistance, formatRaceTime, phaseColor, phaseLabel } from '@/ui/format';
+import { DOW_SHORT, formatDistance, formatRaceTime, phaseColor, phaseLabel, workoutKindColor } from '@/ui/format';
 import { useProfileStore } from '@/store/profile';
-import { hasBackend } from '@/config';
-import { pullSnapshot, pushSnapshot } from '@/api/sync';
 
 const DISTANCE_LABEL: Record<RaceDistance, string> = {
   '5k': '5 km',
@@ -49,12 +46,6 @@ export default function HomeScreen() {
   const profile = useProfileStore((s) => s.profile);
   const plan = useProfileStore((s) => s.plan);
   const activities = useProfileStore((s) => s.activities);
-  const deviceId = useProfileStore((s) => s.deviceId);
-  const hydrateFromSnapshot = useProfileStore((s) => s.hydrateFromSnapshot);
-  const lastSyncedAt = useProfileStore((s) => s.lastSyncedAt);
-  const setLastSyncedAt = useProfileStore((s) => s.setLastSyncedAt);
-  const reset = useProfileStore((s) => s.reset);
-  const [syncBusy, setSyncBusy] = useState(false);
 
   if (!profile) {
     return (
@@ -97,73 +88,44 @@ export default function HomeScreen() {
   const detraining = assessDetraining(activities);
   const detrainingColor = detraining?.level === 'warn' ? '#d97706' : p.accent;
 
-  // Sichern setzt auf dem zuletzt gesehenen Cloud-Stand auf. Hat inzwischen ein
-  // anderes Gerät geschrieben, meldet der Server 409 – dann entscheidet der Nutzer.
-  async function onSyncPush(force = false) {
-    try {
-      setSyncBusy(true);
-      const res = await pushSnapshot(
-        deviceId,
-        { profile, plan, activities },
-        { baseUpdatedAt: lastSyncedAt, force },
-      );
-      if (res.status === 'conflict') {
-        const serverTime = new Date(res.serverUpdatedAt).toLocaleString('de-DE');
-        Alert.alert(
-          'Anderer Stand in der Cloud',
-          `In der Cloud liegt ein Stand von ${serverTime}, den dieses Gerät noch nicht kennt.`,
-          [
-            { text: 'Abbrechen', style: 'cancel' },
-            {
-              text: 'Cloud laden',
-              onPress: () => {
-                hydrateFromSnapshot({
-                  profile: res.snapshot.profile,
-                  plan: res.snapshot.plan,
-                  activities: res.snapshot.activities ?? [],
-                  updatedAt: res.serverUpdatedAt,
-                });
-              },
-            },
-            { text: 'Überschreiben', style: 'destructive', onPress: () => void onSyncPush(true) },
-          ],
-        );
-        return;
-      }
-      setLastSyncedAt(res.updatedAt);
-      Alert.alert('In Cloud gesichert', `Stand: ${new Date(res.updatedAt).toLocaleString('de-DE')}`);
-    } catch (e) {
-      Alert.alert('Sichern fehlgeschlagen', e instanceof Error ? e.message : 'Unbekannter Fehler.');
-    } finally {
-      setSyncBusy(false);
-    }
-  }
-  async function onSyncPull() {
-    try {
-      setSyncBusy(true);
-      const snap = await pullSnapshot(deviceId);
-      if (!snap) {
-        Alert.alert('Nichts gefunden', 'Für dieses Gerät liegt noch kein Cloud-Stand vor.');
-        return;
-      }
-      hydrateFromSnapshot({
-        profile: snap.profile,
-        plan: snap.plan,
-        activities: snap.activities ?? [],
-        ...(snap.updatedAt ? { updatedAt: snap.updatedAt } : {}),
-      });
-      Alert.alert('Aus Cloud geladen', 'Deine Daten wurden übernommen.');
-    } catch (e) {
-      Alert.alert('Laden fehlgeschlagen', e instanceof Error ? e.message : 'Unbekannter Fehler.');
-    } finally {
-      setSyncBusy(false);
-    }
-  }
+  const weekTraining = thisWeek?.workouts.filter((w) => w.workout.kind !== 'rest') ?? [];
+  const weekDone = weekTraining.filter((w) => w.status === 'completed').length;
+  const weekProgress = weekTraining.length > 0 ? weekDone / weekTraining.length : 0;
 
   return (
     <SafeAreaView style={[styles.fill, { backgroundColor: p.bg }]}>
       <ScrollView contentContainerStyle={styles.scroll}>
-        <Text style={[styles.brand, { color: p.accent }]}>PaceForge</Text>
+        <View style={styles.header}>
+          <Text style={[styles.brand, { color: p.accent }]}>PaceForge</Text>
+          <Pressable onPress={() => router.push('/more')} hitSlop={10} style={[styles.gearBtn, { backgroundColor: p.chipBg }]}>
+            <Text style={{ fontSize: 16 }}>⚙️</Text>
+          </Pressable>
+        </View>
+
+        {thisWeek && (
+          <View style={styles.weekStrip}>
+            {thisWeek.workouts.map((sw) => {
+              const isToday = sw.date === today;
+              const isRest = sw.workout.kind === 'rest';
+              return (
+                <View key={sw.date} style={styles.weekStripDay}>
+                  <Text style={[styles.weekStripDow, { color: isToday ? p.accent : p.subtext }]}>
+                    {DOW_SHORT[sw.dayOfWeek]}
+                  </Text>
+                  <View
+                    style={[
+                      styles.weekStripDot,
+                      isRest
+                        ? { backgroundColor: 'transparent', borderWidth: 1, borderColor: p.border }
+                        : { backgroundColor: workoutKindColor(sw.workout.kind) },
+                      isToday && { borderWidth: 2, borderColor: p.text },
+                    ]}
+                  />
+                </View>
+              );
+            })}
+          </View>
+        )}
 
         <View style={[styles.card, { backgroundColor: p.card, borderColor: p.border }]}>
           <Text style={[styles.cardLabel, { color: p.subtext }]}>Dein Ziel</Text>
@@ -240,36 +202,53 @@ export default function HomeScreen() {
                 <Text style={styles.badgeText}>{phaseLabel(thisWeek.phase)}</Text>
               </View>
             </View>
-            {thisWeek.workouts
-              .filter((w) => w.workout.kind !== 'rest')
-              .map((sw) => {
-                const isToday = sw.date === today;
-                return (
-                  <Pressable
-                    key={sw.date}
-                    onPress={() =>
-                      router.push({
-                        pathname: '/workout',
-                        params: { week: thisWeek.index, day: sw.dayOfWeek },
-                      })
-                    }
-                    style={({ pressed }) => [styles.dayRow, { borderTopColor: p.border, opacity: pressed ? 0.6 : 1 }]}
+            {weekTraining.length > 0 && (
+              <View style={styles.weekProgressRow}>
+                <View style={[styles.weekProgressTrack, { backgroundColor: p.chipBg }]}>
+                  <View style={[styles.weekProgressFill, { width: `${weekProgress * 100}%`, backgroundColor: '#16a34a' }]} />
+                </View>
+                <Text style={[styles.weekProgressText, { color: p.subtext }]}>
+                  {weekDone}/{weekTraining.length} erledigt
+                </Text>
+              </View>
+            )}
+            {weekTraining.map((sw) => {
+              const isToday = sw.date === today;
+              const done = sw.status === 'completed';
+              return (
+                <Pressable
+                  key={sw.date}
+                  onPress={() =>
+                    router.push({
+                      pathname: '/workout',
+                      params: { week: thisWeek.index, day: sw.dayOfWeek },
+                    })
+                  }
+                  style={({ pressed }) => [styles.dayRow, { borderTopColor: p.border, opacity: pressed ? 0.6 : 1 }]}
+                >
+                  <Text style={[styles.dow, { color: isToday ? p.accent : p.subtext }]}>
+                    {DOW_SHORT[sw.dayOfWeek]}
+                  </Text>
+                  <View style={[styles.kindDot, { backgroundColor: workoutKindColor(sw.workout.kind) }]} />
+                  <Text
+                    style={[styles.woName, { color: p.text }, done && styles.woNameDone]}
+                    numberOfLines={1}
                   >
-                    <Text style={[styles.dow, { color: isToday ? p.accent : p.subtext }]}>
-                      {DOW_SHORT[sw.dayOfWeek]}
-                    </Text>
-                    <Text style={[styles.woName, { color: p.text }]} numberOfLines={1}>
-                      {sw.workout.name}
-                    </Text>
-                    {weekStrengthDays.has(sw.dayOfWeek) && (
-                      <Text style={[styles.kraftTag, { color: p.accent, borderColor: p.accent }]}>Kraft</Text>
-                    )}
+                    {sw.workout.name}
+                  </Text>
+                  {weekStrengthDays.has(sw.dayOfWeek) && (
+                    <Text style={[styles.kraftTag, { color: p.accent, borderColor: p.accent }]}>Kraft</Text>
+                  )}
+                  {done ? (
+                    <Text style={[styles.doneCheck, { color: '#16a34a' }]}>✓</Text>
+                  ) : (
                     <Text style={[styles.woDist, { color: p.subtext }]}>
                       {formatDistance(sw.workout.estimatedDistanceMeters ?? 0)}
                     </Text>
-                  </Pressable>
-                );
-              })}
+                  )}
+                </Pressable>
+              );
+            })}
           </View>
         )}
 
@@ -327,59 +306,30 @@ export default function HomeScreen() {
           <Text style={[styles.ctaText, { color: p.accent }]}>Fortschritt & Läufe importieren</Text>
         </Pressable>
 
-        <View style={styles.dualRow}>
+        <Text style={[styles.sectionTitle, { color: p.text }]}>Mehr trainieren</Text>
+        <View style={styles.tileGrid}>
           <Pressable
             onPress={() => router.push('/strength')}
-            style={({ pressed }) => [styles.dualCta, { borderColor: p.accent, opacity: pressed ? 0.7 : 1 }]}
+            style={({ pressed }) => [styles.tile, { backgroundColor: p.card, borderColor: p.border, opacity: pressed ? 0.7 : 1 }]}
           >
-            <Text style={[styles.dualText, { color: p.accent }]}>Krafttraining</Text>
+            <Text style={styles.tileEmoji}>💪</Text>
+            <Text style={[styles.tileText, { color: p.text }]}>Krafttraining</Text>
           </Pressable>
           <Pressable
             onPress={() => router.push('/nutrition')}
-            style={({ pressed }) => [styles.dualCta, { borderColor: p.accent, opacity: pressed ? 0.7 : 1 }]}
+            style={({ pressed }) => [styles.tile, { backgroundColor: p.card, borderColor: p.border, opacity: pressed ? 0.7 : 1 }]}
           >
-            <Text style={[styles.dualText, { color: p.accent }]}>Ernährungscoach</Text>
+            <Text style={styles.tileEmoji}>🍽️</Text>
+            <Text style={[styles.tileText, { color: p.text }]}>Ernährung</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => router.push('/training')}
+            style={({ pressed }) => [styles.tile, { backgroundColor: p.card, borderColor: p.border, opacity: pressed ? 0.7 : 1 }]}
+          >
+            <Text style={styles.tileEmoji}>📅</Text>
+            <Text style={[styles.tileText, { color: p.text }]}>Trainingsumfang</Text>
           </Pressable>
         </View>
-
-        {hasBackend && (
-          <View style={[styles.card, { backgroundColor: p.card, borderColor: p.border }]}>
-            <Text style={[styles.cardLabel, { color: p.subtext }]}>Cloud-Sync</Text>
-            <Text style={[styles.syncId, { color: p.subtext }]}>Gerät: {deviceId}</Text>
-            <Text style={[styles.syncId, { color: p.subtext }]}>
-              {lastSyncedAt
-                ? `Zuletzt gesichert: ${new Date(lastSyncedAt).toLocaleString('de-DE')}`
-                : 'Noch nicht gesichert'}
-            </Text>
-            <View style={styles.syncRow}>
-              <Pressable
-                onPress={() => void onSyncPush()}
-                disabled={syncBusy}
-                style={[styles.syncBtn, { backgroundColor: p.accent, opacity: syncBusy ? 0.6 : 1 }]}
-              >
-                {syncBusy ? (
-                  <ActivityIndicator color={p.accentText} />
-                ) : (
-                  <Text style={[styles.syncBtnText, { color: p.accentText }]}>In Cloud sichern</Text>
-                )}
-              </Pressable>
-              <Pressable
-                onPress={onSyncPull}
-                disabled={syncBusy}
-                style={[styles.syncBtnOutline, { borderColor: p.accent, opacity: syncBusy ? 0.6 : 1 }]}
-              >
-                <Text style={[styles.syncBtnText, { color: p.accent }]}>Aus Cloud laden</Text>
-              </Pressable>
-            </View>
-          </View>
-        )}
-
-        <Pressable onPress={reset} style={styles.resetBtn}>
-          <Text style={[styles.resetText, { color: p.subtext }]}>Angaben zurücksetzen</Text>
-        </Pressable>
-        <Pressable onPress={() => router.push('/about')} style={styles.resetBtn}>
-          <Text style={[styles.resetText, { color: p.subtext }]}>Über & Quellen</Text>
-        </Pressable>
       </ScrollView>
     </SafeAreaView>
   );
@@ -388,15 +338,14 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   centerWrap: { flex: 1, justifyContent: 'center', paddingHorizontal: 28, gap: 12 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   brand: { fontSize: 20, fontWeight: '800', letterSpacing: 0.5 },
+  gearBtn: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
   lead: { fontSize: 26, fontWeight: '700', marginTop: 8 },
   leadSub: { fontSize: 15, lineHeight: 22, marginTop: 4 },
   cta: { marginTop: 24, borderRadius: 14, paddingVertical: 16, alignItems: 'center' },
   planCta: { marginTop: 4, borderRadius: 14, paddingVertical: 16, alignItems: 'center' },
   secondaryCta: { marginTop: 4, borderRadius: 14, borderWidth: 1.5, paddingVertical: 16, alignItems: 'center' },
-  dualRow: { flexDirection: 'row', gap: 10, marginTop: 4 },
-  dualCta: { flex: 1, borderRadius: 14, borderWidth: 1.5, paddingVertical: 16, alignItems: 'center' },
-  dualText: { fontSize: 15, fontWeight: '700' },
   ctaText: { fontSize: 17, fontWeight: '700' },
   scroll: { padding: 20, gap: 16 },
   card: { borderRadius: 16, borderWidth: 1, padding: 18 },
@@ -409,13 +358,24 @@ const styles = StyleSheet.create({
   todayStrength: { fontSize: 14, fontWeight: '700', marginTop: 8 },
   todayRest: { fontSize: 16, marginTop: 4 },
   kraftTag: { fontSize: 11, fontWeight: '700', borderWidth: 1, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 1, overflow: 'hidden' },
+  weekStrip: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 4 },
+  weekStripDay: { alignItems: 'center', gap: 6 },
+  weekStripDow: { fontSize: 12, fontWeight: '600' },
+  weekStripDot: { width: 10, height: 10, borderRadius: 5 },
   weekHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 },
   badge: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
   badgeText: { color: '#fff', fontSize: 12, fontWeight: '700' },
-  dayRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, borderTopWidth: 1 },
-  dow: { width: 26, fontSize: 14, fontWeight: '700' },
+  weekProgressRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10, marginBottom: 2 },
+  weekProgressTrack: { flex: 1, height: 6, borderRadius: 3, overflow: 'hidden' },
+  weekProgressFill: { height: 6, borderRadius: 3 },
+  weekProgressText: { fontSize: 12, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  dayRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12, borderTopWidth: 1 },
+  dow: { width: 24, fontSize: 14, fontWeight: '700' },
+  kindDot: { width: 8, height: 8, borderRadius: 4 },
   woName: { flex: 1, fontSize: 15, fontWeight: '600' },
+  woNameDone: { textDecorationLine: 'line-through', opacity: 0.6 },
   woDist: { fontSize: 14, fontVariant: ['tabular-nums'] },
+  doneCheck: { fontSize: 16, fontWeight: '800' },
   zoneRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -424,11 +384,8 @@ const styles = StyleSheet.create({
   },
   zoneLabel: { fontSize: 15, fontWeight: '600' },
   zonePace: { fontSize: 15, fontVariant: ['tabular-nums'] },
-  resetBtn: { alignItems: 'center', paddingVertical: 10 },
-  resetText: { fontSize: 14 },
-  syncId: { fontSize: 12, marginTop: 4, marginBottom: 12, fontVariant: ['tabular-nums'] },
-  syncRow: { flexDirection: 'row', gap: 10 },
-  syncBtn: { flex: 1, borderRadius: 12, paddingVertical: 12, alignItems: 'center', minHeight: 44, justifyContent: 'center' },
-  syncBtnOutline: { flex: 1, borderRadius: 12, borderWidth: 1.5, paddingVertical: 12, alignItems: 'center', minHeight: 44, justifyContent: 'center' },
-  syncBtnText: { fontSize: 14, fontWeight: '700' },
+  tileGrid: { flexDirection: 'row', gap: 10, marginTop: 4 },
+  tile: { flex: 1, borderRadius: 14, borderWidth: 1, paddingVertical: 16, alignItems: 'center', gap: 6 },
+  tileEmoji: { fontSize: 20 },
+  tileText: { fontSize: 13, fontWeight: '700', textAlign: 'center' },
 });

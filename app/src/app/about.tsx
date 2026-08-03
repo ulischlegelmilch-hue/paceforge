@@ -72,6 +72,10 @@ export default function AboutScreen() {
         <Card title="Eisen" p={p}>
           <Text style={[styles.body, { color: p.subtext }]}>{IRON_GUIDANCE}</Text>
         </Card>
+
+        <Pressable onPress={() => router.push('/glossary')} hitSlop={6}>
+          <Text style={[styles.link, { color: p.accent }]}>Workout-Arten erklärt ›</Text>
+        </Pressable>
       </ScrollView>
     </SafeAreaView>
   );
@@ -87,4 +91,5 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: 16, fontWeight: '700' },
   body: { fontSize: 13, lineHeight: 20 },
   sourceItem: { fontSize: 13, lineHeight: 20, fontWeight: '600' },
+  link: { fontSize: 14, fontWeight: '600', textAlign: 'center', paddingVertical: 8 },
 });

@@ -15,6 +15,7 @@ import {
   formatDuration,
   intensityLabel,
   targetText,
+  workoutKindColor,
 } from '@/ui/format';
 import { useProfileStore } from '@/store/profile';
 
@@ -37,6 +38,7 @@ export default function WorkoutScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ week?: string; day?: string }>();
   const plan = useProfileStore((s) => s.plan);
+  const setWorkoutStatus = useProfileStore((s) => s.setWorkoutStatus);
 
   const week = Number(params.week);
   const day = Number(params.day);
@@ -79,9 +81,12 @@ export default function WorkoutScreen() {
           ‹ Zurück
         </Text>
 
-        <Text style={[styles.date, { color: p.subtext }]}>
-          {DOW_SHORT[scheduled.dayOfWeek]}, {date.toLocaleDateString('de-DE')}
-        </Text>
+        <View style={styles.dateRow}>
+          <View style={[styles.kindDot, { backgroundColor: workoutKindColor(workout.kind) }]} />
+          <Text style={[styles.date, { color: p.subtext }]}>
+            {DOW_SHORT[scheduled.dayOfWeek]}, {date.toLocaleDateString('de-DE')}
+          </Text>
+        </View>
         <Text style={[styles.name, { color: p.text }]}>{workout.name}</Text>
 
         <View style={styles.summaryRow}>
@@ -96,6 +101,22 @@ export default function WorkoutScreen() {
             </Text>
           </View>
         </View>
+
+        {workout.elements.length > 0 && (
+          <Pressable
+            onPress={() => setWorkoutStatus(week, day, scheduled.status === 'completed' ? 'planned' : 'completed')}
+            style={[
+              styles.doneBtn,
+              scheduled.status === 'completed'
+                ? { backgroundColor: '#16a34a' }
+                : { backgroundColor: p.chipBg, borderColor: p.border, borderWidth: 1 },
+            ]}
+          >
+            <Text style={[styles.doneText, { color: scheduled.status === 'completed' ? '#fff' : p.text }]}>
+              {scheduled.status === 'completed' ? '✓ Als erledigt markiert' : 'Als erledigt markieren'}
+            </Text>
+          </Pressable>
+        )}
 
         {workout.elements.length === 0 ? (
           <Text style={[styles.restText, { color: p.subtext }]}>
@@ -160,9 +181,13 @@ const styles = StyleSheet.create({
   fill: { flex: 1 },
   scroll: { padding: 20, gap: 4 },
   back: { fontSize: 16, fontWeight: '600', marginBottom: 12 },
+  dateRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  kindDot: { width: 10, height: 10, borderRadius: 5 },
   date: { fontSize: 14, fontWeight: '600' },
   name: { fontSize: 26, fontWeight: '800', marginTop: 2 },
   summaryRow: { flexDirection: 'row', gap: 10, marginTop: 12 },
+  doneBtn: { marginTop: 14, borderRadius: 12, paddingVertical: 12, alignItems: 'center' },
+  doneText: { fontSize: 14, fontWeight: '700' },
   summaryPill: { borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 },
   summaryText: { fontSize: 14, fontWeight: '700' },
   card: { borderRadius: 14, borderWidth: 1, padding: 4 },

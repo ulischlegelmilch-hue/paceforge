@@ -13,6 +13,7 @@ import {
   type EquipmentItem,
   type FitnessInput,
   type Goal,
+  type ScheduledWorkoutStatus,
   type TrainingPlan,
 } from '@paceforge/core';
 
@@ -58,6 +59,8 @@ interface ProfileState {
   setLastSyncedAt: (at: string | null) => void;
   createProfile: (input: CreateProfileInput) => AthleteProfile;
   addActivity: (activity: CompletedActivity) => void;
+  /** Setzt den Status einer geplanten Einheit (z. B. manuell "erledigt" ohne FIT-Import). */
+  setWorkoutStatus: (weekIndex: number, dayOfWeek: number, status: ScheduledWorkoutStatus) => void;
   applyAdaptation: (result: AdaptationResult) => void;
   /** Fitness aus einer neuen Bestzeit/Testleistung neu berechnen (VDOT + Plan). */
   updateFitnessFromRace: (input: {
@@ -116,6 +119,16 @@ export const useProfileStore = create<ProfileState>()(
     return profile;
   },
   addActivity: (activity) => set((s) => ({ activities: [...s.activities, activity] })),
+  setWorkoutStatus: (weekIndex, dayOfWeek, status) =>
+    set((s) => {
+      if (!s.plan) return s;
+      const weeks = s.plan.weeks.map((w) =>
+        w.index !== weekIndex
+          ? w
+          : { ...w, workouts: w.workouts.map((wo) => (wo.dayOfWeek === dayOfWeek ? { ...wo, status } : wo)) },
+      );
+      return { plan: { ...s.plan, weeks } };
+    }),
   applyAdaptation: (result) =>
     set((s) => {
       if (!s.profile || !s.plan) return s;

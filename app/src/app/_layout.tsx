@@ -16,6 +16,8 @@ export default function RootLayout() {
         <Stack.Screen name="nutrition" />
         <Stack.Screen name="training" />
         <Stack.Screen name="about" />
+        <Stack.Screen name="more" />
+        <Stack.Screen name="glossary" />
       </Stack>
     </>
   );
