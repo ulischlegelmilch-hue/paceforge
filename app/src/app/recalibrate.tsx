@@ -8,11 +8,16 @@ import { usePalette, type Palette } from '@/ui/colors';
 import { useProfileStore } from '@/store/profile';
 
 const DISTANCES: { label: string; meters: number }[] = [
+  { label: '3 km', meters: 3000 },
   { label: '5 km', meters: 5000 },
   { label: '10 km', meters: 10000 },
   { label: 'Halbmarathon', meters: 21097.5 },
   { label: 'Marathon', meters: 42195 },
 ];
+
+// Wie im Onboarding: der 12-Minuten-Cooper-Test ist ein „Rennen" mit fester
+// Zeit (720 s) und variabler Distanz.
+const COOPER_SECONDS = 720;
 
 function Chip({ label, selected, onPress, p }: { label: string; selected: boolean; onPress: () => void; p: Palette }) {
   return (
@@ -34,31 +39,40 @@ export default function RecalibrateScreen() {
   const currentVdot = useProfileStore((s) => s.profile?.currentVdot ?? null);
   const updateFitnessFromRace = useProfileStore((s) => s.updateFitnessFromRace);
 
+  const [mode, setMode] = useState<'race' | 'cooper'>('race');
   const [meters, setMeters] = useState(5000);
+  const [cooperMeters, setCooperMeters] = useState('');
   const [h, setH] = useState('');
   const [m, setM] = useState('');
   const [sec, setSec] = useState('');
   const [ascent, setAscent] = useState('');
   const ascentNum = ascent === '' ? 0 : parseInt(ascent, 10);
 
-  const timeSeconds = useMemo(() => {
+  // Beide Modi münden in dasselbe Paar Distanz/Zeit für vdotFromRace.
+  const entry = useMemo((): { distanceMeters: number; timeSeconds: number } | null => {
+    if (mode === 'cooper') {
+      const d = parseInt(cooperMeters, 10);
+      if (!Number.isFinite(d) || d < 1000 || d > 6000) return null;
+      return { distanceMeters: d, timeSeconds: COOPER_SECONDS };
+    }
     const hh = h === '' ? 0 : parseInt(h, 10);
     const mm = m === '' ? 0 : parseInt(m, 10);
     const ss = sec === '' ? 0 : parseInt(sec, 10);
-    if ([hh, mm, ss].some((n) => !Number.isFinite(n)) || mm >= 60 || ss >= 60) return 0;
-    return hh * 3600 + mm * 60 + ss;
-  }, [h, m, sec]);
+    if ([hh, mm, ss].some((n) => !Number.isFinite(n)) || mm >= 60 || ss >= 60) return null;
+    const total = hh * 3600 + mm * 60 + ss;
+    return total > 0 ? { distanceMeters: meters, timeSeconds: total } : null;
+  }, [mode, cooperMeters, h, m, sec, meters]);
 
-  const newVdot =
-    timeSeconds > 0
-      ? Math.round(vdotFromRace(gradeAdjustedDistance(meters, ascentNum), timeSeconds) * 10) / 10
-      : null;
+  const newVdot = entry
+    ? Math.round(
+        vdotFromRace(gradeAdjustedDistance(entry.distanceMeters, ascentNum), entry.timeSeconds) * 10,
+      ) / 10
+    : null;
 
   function apply() {
-    if (timeSeconds <= 0) return;
+    if (!entry) return;
     updateFitnessFromRace({
-      distanceMeters: meters,
-      timeSeconds,
+      ...entry,
       ...(Number.isFinite(ascentNum) && ascentNum > 0 ? { ascentMeters: ascentNum } : {}),
     });
     router.back();
@@ -87,21 +101,51 @@ export default function RecalibrateScreen() {
           {currentVdot != null ? ` Aktuell: VDOT ${currentVdot}.` : ''}
         </Text>
 
-        <Text style={[styles.label, { color: p.subtext }]}>Distanz</Text>
         <View style={styles.chipWrap}>
-          {DISTANCES.map((d) => (
-            <Chip key={d.meters} label={d.label} selected={meters === d.meters} onPress={() => setMeters(d.meters)} p={p} />
-          ))}
+          <Chip label="Lauf / Bestzeit" selected={mode === 'race'} onPress={() => setMode('race')} p={p} />
+          <Chip label="12-Minuten-Test" selected={mode === 'cooper'} onPress={() => setMode('cooper')} p={p} />
         </View>
 
-        <Text style={[styles.label, { color: p.subtext }]}>Zeit (Std : Min : Sek)</Text>
-        <View style={styles.timeRow}>
-          {numField(h, setH, 'h', 2)}
-          <Text style={[styles.colon, { color: p.text }]}>:</Text>
-          {numField(m, setM, 'mm', 2)}
-          <Text style={[styles.colon, { color: p.text }]}>:</Text>
-          {numField(sec, setSec, 'ss', 2)}
-        </View>
+        {mode === 'cooper' ? (
+          <>
+            <Text style={[styles.sub, { color: p.subtext }]}>
+              12 Minuten so weit laufen wie möglich (gern auf einer Bahn), danach die Distanz eintragen.
+            </Text>
+            <Text style={[styles.label, { color: p.subtext }]}>Distanz in 12 Minuten (Meter)</Text>
+            <TextInput
+              value={cooperMeters}
+              onChangeText={(t) => setCooperMeters(t.replace(/[^0-9]/g, '').slice(0, 4))}
+              keyboardType="number-pad"
+              placeholder="z. B. 2600"
+              placeholderTextColor={p.subtext}
+              style={[styles.timeInput, { color: p.text, backgroundColor: p.card, borderColor: p.border, width: 130 }]}
+            />
+          </>
+        ) : (
+          <>
+            <Text style={[styles.label, { color: p.subtext }]}>Distanz</Text>
+            <View style={styles.chipWrap}>
+              {DISTANCES.map((d) => (
+                <Chip
+                  key={d.meters}
+                  label={d.label}
+                  selected={meters === d.meters}
+                  onPress={() => setMeters(d.meters)}
+                  p={p}
+                />
+              ))}
+            </View>
+
+            <Text style={[styles.label, { color: p.subtext }]}>Zeit (Std : Min : Sek)</Text>
+            <View style={styles.timeRow}>
+              {numField(h, setH, 'h', 2)}
+              <Text style={[styles.colon, { color: p.text }]}>:</Text>
+              {numField(m, setM, 'mm', 2)}
+              <Text style={[styles.colon, { color: p.text }]}>:</Text>
+              {numField(sec, setSec, 'ss', 2)}
+            </View>
+          </>
+        )}
 
         <Text style={[styles.label, { color: p.subtext }]}>Höhenmeter (optional)</Text>
         <TextInput
@@ -126,10 +170,10 @@ export default function RecalibrateScreen() {
 
         <Pressable
           onPress={apply}
-          disabled={timeSeconds <= 0}
-          style={[styles.applyBtn, { backgroundColor: timeSeconds > 0 ? p.accent : p.border }]}
+          disabled={!entry}
+          style={[styles.applyBtn, { backgroundColor: entry ? p.accent : p.border }]}
         >
-          <Text style={[styles.applyText, { color: timeSeconds > 0 ? p.accentText : p.subtext }]}>
+          <Text style={[styles.applyText, { color: entry ? p.accentText : p.subtext }]}>
             Übernehmen & Plan neu berechnen
           </Text>
         </Pressable>
