@@ -51,6 +51,8 @@ export default function HomeScreen() {
   const activities = useProfileStore((s) => s.activities);
   const deviceId = useProfileStore((s) => s.deviceId);
   const hydrateFromSnapshot = useProfileStore((s) => s.hydrateFromSnapshot);
+  const lastSyncedAt = useProfileStore((s) => s.lastSyncedAt);
+  const setLastSyncedAt = useProfileStore((s) => s.setLastSyncedAt);
   const reset = useProfileStore((s) => s.reset);
   const [syncBusy, setSyncBusy] = useState(false);
 
@@ -95,11 +97,41 @@ export default function HomeScreen() {
   const detraining = assessDetraining(activities);
   const detrainingColor = detraining?.level === 'warn' ? '#d97706' : p.accent;
 
-  async function onSyncPush() {
+  // Sichern setzt auf dem zuletzt gesehenen Cloud-Stand auf. Hat inzwischen ein
+  // anderes Gerät geschrieben, meldet der Server 409 – dann entscheidet der Nutzer.
+  async function onSyncPush(force = false) {
     try {
       setSyncBusy(true);
-      const at = await pushSnapshot(deviceId, { profile, plan, activities });
-      Alert.alert('In Cloud gesichert', `Stand: ${new Date(at).toLocaleString('de-DE')}`);
+      const res = await pushSnapshot(
+        deviceId,
+        { profile, plan, activities },
+        { baseUpdatedAt: lastSyncedAt, force },
+      );
+      if (res.status === 'conflict') {
+        const serverTime = new Date(res.serverUpdatedAt).toLocaleString('de-DE');
+        Alert.alert(
+          'Anderer Stand in der Cloud',
+          `In der Cloud liegt ein Stand von ${serverTime}, den dieses Gerät noch nicht kennt.`,
+          [
+            { text: 'Abbrechen', style: 'cancel' },
+            {
+              text: 'Cloud laden',
+              onPress: () => {
+                hydrateFromSnapshot({
+                  profile: res.snapshot.profile,
+                  plan: res.snapshot.plan,
+                  activities: res.snapshot.activities ?? [],
+                  updatedAt: res.serverUpdatedAt,
+                });
+              },
+            },
+            { text: 'Überschreiben', style: 'destructive', onPress: () => void onSyncPush(true) },
+          ],
+        );
+        return;
+      }
+      setLastSyncedAt(res.updatedAt);
+      Alert.alert('In Cloud gesichert', `Stand: ${new Date(res.updatedAt).toLocaleString('de-DE')}`);
     } catch (e) {
       Alert.alert('Sichern fehlgeschlagen', e instanceof Error ? e.message : 'Unbekannter Fehler.');
     } finally {
@@ -114,7 +146,12 @@ export default function HomeScreen() {
         Alert.alert('Nichts gefunden', 'Für dieses Gerät liegt noch kein Cloud-Stand vor.');
         return;
       }
-      hydrateFromSnapshot({ profile: snap.profile, plan: snap.plan, activities: snap.activities ?? [] });
+      hydrateFromSnapshot({
+        profile: snap.profile,
+        plan: snap.plan,
+        activities: snap.activities ?? [],
+        ...(snap.updatedAt ? { updatedAt: snap.updatedAt } : {}),
+      });
       Alert.alert('Aus Cloud geladen', 'Deine Daten wurden übernommen.');
     } catch (e) {
       Alert.alert('Laden fehlgeschlagen', e instanceof Error ? e.message : 'Unbekannter Fehler.');
@@ -309,9 +346,14 @@ export default function HomeScreen() {
           <View style={[styles.card, { backgroundColor: p.card, borderColor: p.border }]}>
             <Text style={[styles.cardLabel, { color: p.subtext }]}>Cloud-Sync</Text>
             <Text style={[styles.syncId, { color: p.subtext }]}>Gerät: {deviceId}</Text>
+            <Text style={[styles.syncId, { color: p.subtext }]}>
+              {lastSyncedAt
+                ? `Zuletzt gesichert: ${new Date(lastSyncedAt).toLocaleString('de-DE')}`
+                : 'Noch nicht gesichert'}
+            </Text>
             <View style={styles.syncRow}>
               <Pressable
-                onPress={onSyncPush}
+                onPress={() => void onSyncPush()}
                 disabled={syncBusy}
                 style={[styles.syncBtn, { backgroundColor: p.accent, opacity: syncBusy ? 0.6 : 1 }]}
               >

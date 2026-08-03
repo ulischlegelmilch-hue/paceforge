@@ -32,6 +32,8 @@ interface SnapshotInput {
   profile: AthleteProfile | null;
   plan: TrainingPlan | null;
   activities: CompletedActivity[];
+  /** Serverstand des Snapshots (setzt `lastSyncedAt`, falls vorhanden). */
+  updatedAt?: string;
 }
 
 interface ProfileState {
@@ -40,6 +42,12 @@ interface ProfileState {
   activities: CompletedActivity[];
   /** Stabile Geräte-ID als Sync-Schlüssel (einmalig erzeugt, persistiert). */
   deviceId: string;
+  /**
+   * `updatedAt` des zuletzt gesehenen Cloud-Stands. Wird beim Sichern mitgeschickt,
+   * damit der Server erkennt, ob inzwischen ein anderes Gerät geschrieben hat.
+   */
+  lastSyncedAt: string | null;
+  setLastSyncedAt: (at: string | null) => void;
   createProfile: (input: CreateProfileInput) => AthleteProfile;
   addActivity: (activity: CompletedActivity) => void;
   applyAdaptation: (result: AdaptationResult) => void;
@@ -76,6 +84,8 @@ export const useProfileStore = create<ProfileState>()(
   plan: null,
   activities: [],
   deviceId: makeDeviceId(),
+  lastSyncedAt: null,
+  setLastSyncedAt: (at) => set({ lastSyncedAt: at }),
   createProfile: ({ goal, fitness, daysPerWeek, longRunDay, strength }) => {
     const profile: AthleteProfile = {
       id: `athlete-${Date.now()}`,
@@ -144,8 +154,13 @@ export const useProfileStore = create<ProfileState>()(
     }),
   setWeightKg: (kg) => set((s) => patchProfile(s, { weightKg: kg })),
   hydrateFromSnapshot: (snap) =>
-    set({ profile: snap.profile, plan: snap.plan, activities: snap.activities ?? [] }),
-  reset: () => set({ profile: null, plan: null, activities: [] }),
+    set({
+      profile: snap.profile,
+      plan: snap.plan,
+      activities: snap.activities ?? [],
+      ...(snap.updatedAt ? { lastSyncedAt: snap.updatedAt } : {}),
+    }),
+  reset: () => set({ profile: null, plan: null, activities: [], lastSyncedAt: null }),
     }),
     {
       name: 'paceforge-store',
@@ -156,6 +171,7 @@ export const useProfileStore = create<ProfileState>()(
         plan: s.plan,
         activities: s.activities,
         deviceId: s.deviceId,
+        lastSyncedAt: s.lastSyncedAt,
       }),
     },
   ),

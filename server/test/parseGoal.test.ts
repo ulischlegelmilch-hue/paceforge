@@ -18,7 +18,7 @@ describe('POST /api/parse-goal (Regel-Fallback)', () => {
   it('healthz liefert ok', async () => {
     const res = await app.inject({ method: 'GET', url: '/healthz' });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ ok: true });
+    expect(res.json().ok).toBe(true);
   });
 
   it('parst ein deutsches Ziel per Regeln', async () => {

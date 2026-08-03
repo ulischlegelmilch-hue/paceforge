@@ -29,3 +29,10 @@ services:
         sync: false
       - key: GARMIN_CLIENT_SECRET
         sync: false
+      # Optional: dauerhafte Sync-Snapshot-Ablage (Upstash Redis, REST-API).
+      # Ohne diese Werte läuft der Server mit In-Memory-Ablage weiter (verliert
+      # Snapshots bei jedem Neustart/Deploy/Einschlafen des Free-Tiers).
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false

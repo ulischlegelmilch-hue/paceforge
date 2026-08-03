@@ -2,22 +2,27 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { parseGoalSmart } from './parseGoalLLM';
 import { registerSync } from './sync';
 import { registerGarmin } from './garmin';
+import { createSnapshotStore, type SnapshotStore } from './storage';
 
 // Baut die Fastify-App OHNE zu lauschen – so kann sie im Test per app.inject()
 // angesprochen werden. Das Lauschen passiert nur in index.ts.
-export function buildApp(): FastifyInstance {
+// `store` ist injizierbar (Tests); ohne Angabe entscheidet die Umgebung
+// (Upstash-Redis wenn konfiguriert, sonst In-Memory).
+export function buildApp(opts: { store?: SnapshotStore } = {}): FastifyInstance {
   const app = Fastify({ logger: false });
+  const store = opts.store ?? createSnapshotStore();
 
   // CORS offen (die mobile App / der Web-Simulator greifen von woanders zu).
   app.addHook('onRequest', (_req, reply, done) => {
     reply.header('Access-Control-Allow-Origin', '*');
-    reply.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    reply.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     reply.header('Access-Control-Allow-Headers', 'Content-Type');
     done();
   });
   app.options('/*', async (_req, reply) => reply.code(204).send());
 
-  app.get('/healthz', async () => ({ ok: true }));
+  // `storage` zeigt nach dem Deploy sofort, ob die Persistenz greift.
+  app.get('/healthz', async () => ({ ok: true, storage: store.kind }));
 
   // Natürlichsprachliche Zieleingabe: nutzt Claude, wenn ein API-Key gesetzt ist,
   // sonst den regelbasierten Parser aus @paceforge/core. Antwort enthält `source`.
@@ -31,7 +36,7 @@ export function buildApp(): FastifyInstance {
   });
 
   // Cross-Device-Sync + Garmin-OAuth-Gerüst (Phase 2).
-  registerSync(app);
+  registerSync(app, store);
   registerGarmin(app);
 
   return app;
