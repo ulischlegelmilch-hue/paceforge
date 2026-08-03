@@ -131,6 +131,44 @@ describe('generatePlan – Varianten', () => {
     expect(long.dayOfWeek).toBe(0);
   });
 
+  it('weekStartDay verschiebt das gesamte Tages-Muster, nicht nur den Long Run', () => {
+    const base = generatePlan(profile(), { startDate: FIXED_START });
+    const baseDays = base.weeks[2]!.workouts
+      .filter((w) => w.workout.kind !== 'rest')
+      .map((w) => w.dayOfWeek)
+      .sort((a, b) => a - b);
+
+    // Anker des 4-Tage-Templates ist Dienstag (2) -> weekStartDay 4 verschiebt um +2.
+    const shifted = generatePlan(profile({ weekStartDay: 4 }), { startDate: FIXED_START });
+    const shiftedDays = shifted.weeks[2]!.workouts
+      .filter((w) => w.workout.kind !== 'rest')
+      .map((w) => w.dayOfWeek)
+      .sort((a, b) => a - b);
+
+    expect(shiftedDays).toEqual(baseDays.map((d) => (d + 2) % 7).sort((a, b) => a - b));
+    // gleiche Anzahl Trainingstage, nur andere Wochentage
+    expect(shiftedDays).toHaveLength(baseDays.length);
+  });
+
+  it('weekStartDay + longRunDay lassen sich kombinieren (longRunDay gewinnt für den Long Run)', () => {
+    const plan = generatePlan(profile({ weekStartDay: 4, longRunDay: 3 }), { startDate: FIXED_START });
+    const long = plan.weeks[0]!.workouts.find((w) => w.workout.kind === 'long')!;
+    expect(long.dayOfWeek).toBe(3);
+    // weiterhin genau daysPerWeek Trainingstage, keine Dopplungen/Lücken durch die Kombination
+    const training = plan.weeks[0]!.workouts.filter((w) => w.workout.kind !== 'rest');
+    expect(training).toHaveLength(4);
+    expect(new Set(training.map((w) => w.dayOfWeek)).size).toBe(4);
+  });
+
+  it('ohne weekStartDay bleibt das bisherige Standard-Muster erhalten', () => {
+    const plan = generatePlan(profile(), { startDate: FIXED_START });
+    const days = plan.weeks[0]!.workouts
+      .filter((w) => w.workout.kind !== 'rest')
+      .map((w) => w.dayOfWeek)
+      .sort((a, b) => a - b);
+    expect(days).toEqual([0, 2, 4, 6]); // So(recovery)/Di/Do/Sa wie im 4-Tage-Template
+  });
+
   it('Marathon-Ziel hat längere Long Runs als 5k-Ziel', () => {
     const mara = generatePlan(profile({ goal: { distance: 'marathon', weeks: 16 } }), { startDate: FIXED_START });
     const fivek = generatePlan(profile({ goal: { distance: '5k', weeks: 16 } }), { startDate: FIXED_START });

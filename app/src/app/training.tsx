@@ -8,6 +8,16 @@ import { useProfileStore } from '@/store/profile';
 
 const RUN_OPTIONS = [3, 4, 5, 6];
 const STRENGTH_OPTIONS = [0, 1, 2, 3];
+// Anzeige Mo..So (0=So..6=Sa wie im Domain-Modell).
+const WEEKDAY_OPTIONS: { value: number; label: string }[] = [
+  { value: 1, label: 'Mo' },
+  { value: 2, label: 'Di' },
+  { value: 3, label: 'Mi' },
+  { value: 4, label: 'Do' },
+  { value: 5, label: 'Fr' },
+  { value: 6, label: 'Sa' },
+  { value: 0, label: 'So' },
+];
 
 function levelColor(level: AdviceLevel, p: Palette): string {
   if (level === 'good') return '#16a34a';
@@ -32,6 +42,7 @@ export default function TrainingScreen() {
   const profile = useProfileStore((s) => s.profile);
   const setDaysPerWeek = useProfileStore((s) => s.setDaysPerWeek);
   const setStrengthSessions = useProfileStore((s) => s.setStrengthSessions);
+  const setWeekStartDay = useProfileStore((s) => s.setWeekStartDay);
 
   if (!profile) {
     return (
@@ -67,6 +78,28 @@ export default function TrainingScreen() {
         </View>
         <Text style={[styles.hint, { color: p.subtext }]}>
           Empfohlen für dein Ziel: mindestens {assessment.recommendedRunDays} Tage.
+        </Text>
+
+        <Text style={[styles.label, { color: p.subtext }]}>Wochenstart (erster Lauf)</Text>
+        <View style={styles.chipWrap}>
+          <Chip
+            label="Egal"
+            selected={profile.weekStartDay === undefined}
+            onPress={() => setWeekStartDay(undefined)}
+            p={p}
+          />
+          {WEEKDAY_OPTIONS.map((d) => (
+            <Chip
+              key={d.value}
+              label={d.label}
+              selected={profile.weekStartDay === d.value}
+              onPress={() => setWeekStartDay(d.value)}
+              p={p}
+            />
+          ))}
+        </View>
+        <Text style={[styles.hint, { color: p.subtext }]}>
+          Verschiebt dein ganzes Wochenmuster (nicht nur den Long Run) auf den gewünschten Rhythmus.
         </Text>
 
         <Text style={[styles.label, { color: p.subtext }]}>Krafteinheiten pro Woche</Text>

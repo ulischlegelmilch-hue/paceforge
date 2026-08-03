@@ -59,6 +59,16 @@ const DISTANCES: { key: RaceDistance; label: string }[] = [
 
 const WEEK_OPTIONS = [8, 12, 16, 20];
 const DAY_OPTIONS = [3, 4, 5, 6];
+// Anzeige Mo..So (0=So..6=Sa wie im Domain-Modell), passend zu DOW_SHORT aus ui/format.
+const WEEKDAY_OPTIONS: { value: number; label: string }[] = [
+  { value: 1, label: 'Mo' },
+  { value: 2, label: 'Di' },
+  { value: 3, label: 'Mi' },
+  { value: 4, label: 'Do' },
+  { value: 5, label: 'Fr' },
+  { value: 6, label: 'Sa' },
+  { value: 0, label: 'So' },
+];
 const LEVELS: { key: SelfRatedLevel; label: string }[] = [
   { key: 'beginner', label: 'Einsteiger' },
   { key: 'intermediate', label: 'Fortgeschritten' },
@@ -78,6 +88,7 @@ export default function Onboarding() {
   const [distance, setDistance] = useState<RaceDistance | null>(null);
   const [weeks, setWeeks] = useState<number | null>(null);
   const [days, setDays] = useState<number | null>(null);
+  const [weekStartDay, setWeekStartDay] = useState<number | null>(null);
   const [strengthSessions, setStrengthSessions] = useState(2);
   const [strengthEquipment, setStrengthEquipment] = useState<'gym' | 'bodyweight'>('bodyweight');
   const [targetTimeSeconds, setTargetTimeSeconds] = useState<number | null>(null);
@@ -177,6 +188,7 @@ export default function Onboarding() {
       goal,
       fitness,
       daysPerWeek: days,
+      ...(weekStartDay !== null ? { weekStartDay } : {}),
       strength: { sessionsPerWeek: strengthSessions, equipment: strengthEquipment },
     });
     router.replace('/');
@@ -407,6 +419,22 @@ export default function Onboarding() {
             <View style={styles.chipWrap}>
               {DAY_OPTIONS.map((d) => (
                 <Chip key={d} label={`${d} Tage`} selected={days === d} onPress={() => setDays(d)} p={p} />
+              ))}
+            </View>
+
+            <Text style={[styles.subLabel, { color: p.subtext, marginTop: 18 }]}>
+              An welchem Wochentag beginnt deine Trainingswoche (dein erster Lauf)?
+            </Text>
+            <View style={styles.chipWrap}>
+              <Chip label="Egal" selected={weekStartDay === null} onPress={() => setWeekStartDay(null)} p={p} />
+              {WEEKDAY_OPTIONS.map((d) => (
+                <Chip
+                  key={d.value}
+                  label={d.label}
+                  selected={weekStartDay === d.value}
+                  onPress={() => setWeekStartDay(d.value)}
+                  p={p}
+                />
               ))}
             </View>
           </>

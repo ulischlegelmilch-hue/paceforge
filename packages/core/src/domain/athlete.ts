@@ -55,6 +55,13 @@ export interface AthleteProfile {
   preferredDays?: number[];
   /** Wochentag für den Long Run (0=So .. 6=Sa). */
   longRunDay?: number;
+  /**
+   * Wochentag des ersten Laufs der Trainingswoche (0=So .. 6=Sa). Verschiebt
+   * das gesamte Tages-Muster (nicht nur den Long Run) auf den gewünschten
+   * Rhythmus. Ohne Angabe bleibt der bisherige Standard-Anker (Dienstag/Montag
+   * je nach Tagesanzahl) erhalten.
+   */
+  weekStartDay?: number;
   device?: { brand: 'garmin'; model?: string };
   units: Units;
   /** Körpergewicht in kg (optional) – für Ernährungs-Gramm-Ziele. */

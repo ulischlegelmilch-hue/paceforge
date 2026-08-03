@@ -11,6 +11,7 @@ import {
   makeTempo,
 } from './workouts';
 import type { GenerateOptions } from './generatePlan';
+import { shiftSlotsToWeekStart } from './weekTemplate';
 
 // Erhaltungs-Plan ("Form halten") — für Läufer:innen mit vorhandener Grundlage,
 // die keinen Wettkampf vorbereiten. Quelle: Recherche Teil 2 (Minetti/Hickson/Seiler).
@@ -116,7 +117,7 @@ export function generateMaintenancePlan(
 ): TrainingPlan {
   const totalWeeks = options.weeks && options.weeks > 0 ? Math.round(options.weeks) : 12;
   const days = clampDays(profile.daysPerWeek);
-  const template = MAINT_TEMPLATES[days];
+  const template = shiftSlotsToWeekStart(MAINT_TEMPLATES[days], profile.weekStartDay);
   const vdot = profile.currentVdot;
   const longDay = profile.longRunDay;
 

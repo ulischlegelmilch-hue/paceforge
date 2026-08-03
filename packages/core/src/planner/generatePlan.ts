@@ -11,6 +11,7 @@ import {
   makeTempo,
 } from './workouts';
 import { generateMaintenancePlan } from './maintenance';
+import { shiftSlotsToWeekStart } from './weekTemplate';
 
 // Regelbasierter Plan-Generator (KEIN LLM). Periodisierung base -> build -> peak
 // -> taper; jede Woche folgt einem Tages-Template mit 1 Long Run + 1–2 Qualitäts-
@@ -189,7 +190,7 @@ export function generatePlan(profile: AthleteProfile, options: GenerateOptions =
   const progressWeeks = Math.max(1, totalWeeks - taperCount);
 
   const days = clampDays(profile.daysPerWeek);
-  const template = DAY_TEMPLATES[days];
+  const template = shiftSlotsToWeekStart(DAY_TEMPLATES[days], profile.weekStartDay);
   const vdot = profile.currentVdot;
   const longDay = profile.longRunDay;
 

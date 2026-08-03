@@ -108,4 +108,21 @@ describe('generateMaintenancePlan', () => {
     // Tageszahl bleibt trotz Verschiebung erhalten.
     expect(runDays(plan.weeks[0]!)).toBe(4);
   });
+
+  it('weekStartDay verschiebt das gesamte Tages-Muster (Anker Dienstag -> +2 bei Wunsch Donnerstag)', () => {
+    const base = generateMaintenancePlan(profile(), { startDate: FIXED_START, weeks: 1 });
+    const baseDays = base.weeks[0]!.workouts
+      .filter((w) => w.workout.kind !== 'rest')
+      .map((w) => w.dayOfWeek)
+      .sort((a, b) => a - b);
+
+    const shifted = generateMaintenancePlan(profile({ weekStartDay: 4 }), { startDate: FIXED_START, weeks: 1 });
+    const shiftedDays = shifted.weeks[0]!.workouts
+      .filter((w) => w.workout.kind !== 'rest')
+      .map((w) => w.dayOfWeek)
+      .sort((a, b) => a - b);
+
+    expect(shiftedDays).toEqual(baseDays.map((d) => (d + 2) % 7).sort((a, b) => a - b));
+    expect(runDays(shifted.weeks[0]!)).toBe(4);
+  });
 });
