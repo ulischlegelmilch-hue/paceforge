@@ -169,6 +169,53 @@ describe('generatePlan – Varianten', () => {
     expect(days).toEqual([0, 2, 4, 6]); // So(recovery)/Di/Do/Sa wie im 4-Tage-Template
   });
 
+  it('availableDays: platziert alle Trainingstage innerhalb der verfügbaren Menge', () => {
+    const avail = [1, 3, 5, 0]; // Mo, Mi, Fr, So
+    const plan = generatePlan(profile({ availableDays: avail }), { startDate: FIXED_START });
+    const training = plan.weeks[0]!.workouts.filter((w) => w.workout.kind !== 'rest');
+    expect(training).toHaveLength(4); // daysPerWeek unverändert
+    for (const w of training) {
+      expect(avail).toContain(w.dayOfWeek);
+    }
+    // weiterhin genau ein Long Run
+    expect(training.filter((w) => w.workout.kind === 'long')).toHaveLength(1);
+  });
+
+  it('availableDays: weniger verfügbare Tage als daysPerWeek -> entsprechend weniger Trainingstage', () => {
+    const plan = generatePlan(profile({ daysPerWeek: 5, availableDays: [2, 4] }), { startDate: FIXED_START });
+    const training = plan.weeks[0]!.workouts.filter((w) => w.workout.kind !== 'rest');
+    expect(training).toHaveLength(2);
+    expect(training.map((w) => w.dayOfWeek).sort()).toEqual([2, 4]);
+  });
+
+  it('availableDays hat Vorrang vor weekStartDay', () => {
+    const plan = generatePlan(profile({ availableDays: [1, 3, 5, 0], weekStartDay: 2 }), {
+      startDate: FIXED_START,
+    });
+    const training = plan.weeks[0]!.workouts.filter((w) => w.workout.kind !== 'rest');
+    for (const w of training) {
+      expect([1, 3, 5, 0]).toContain(w.dayOfWeek);
+    }
+  });
+
+  it('longRunDay wird bei availableDays nur angewandt, wenn er selbst verfügbar ist', () => {
+    // longRunDay=2 (Di) liegt NICHT in availableDays -> wird ignoriert, Long Run
+    // bleibt auf einem der verfügbaren Tage statt auf Dienstag zu rutschen.
+    const plan = generatePlan(profile({ availableDays: [1, 3, 5, 0], longRunDay: 2 }), {
+      startDate: FIXED_START,
+    });
+    const long = plan.weeks[0]!.workouts.find((w) => w.workout.kind === 'long')!;
+    expect(long.dayOfWeek).not.toBe(2);
+    expect([1, 3, 5, 0]).toContain(long.dayOfWeek);
+
+    // longRunDay=0 (So) liegt IN availableDays -> wird angewandt.
+    const plan2 = generatePlan(profile({ availableDays: [1, 3, 5, 0], longRunDay: 0 }), {
+      startDate: FIXED_START,
+    });
+    const long2 = plan2.weeks[0]!.workouts.find((w) => w.workout.kind === 'long')!;
+    expect(long2.dayOfWeek).toBe(0);
+  });
+
   it('Marathon-Ziel hat längere Long Runs als 5k-Ziel', () => {
     const mara = generatePlan(profile({ goal: { distance: 'marathon', weeks: 16 } }), { startDate: FIXED_START });
     const fivek = generatePlan(profile({ goal: { distance: '5k', weeks: 16 } }), { startDate: FIXED_START });

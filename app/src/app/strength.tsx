@@ -2,12 +2,14 @@ import { useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
+  EQUIPMENT_ITEM_LABEL,
   hardRunDays,
   kindLabel,
   STRENGTH_NOTES,
   strengthSessionsForPhase,
   weekOf,
   ymdOf,
+  type EquipmentItem,
 } from '@paceforge/core';
 
 import { usePalette, type Palette } from '@/ui/colors';
@@ -30,9 +32,10 @@ export default function StrengthScreen() {
   const router = useRouter();
   const profile = useProfileStore((s) => s.profile);
   const plan = useProfileStore((s) => s.plan);
-  const setEquipment = useProfileStore((s) => s.setStrengthEquipment);
+  const setOwnedEquipment = useProfileStore((s) => s.setOwnedEquipment);
 
   const equipment = profile?.strength?.equipment ?? 'bodyweight';
+  const ownedEquipment = new Set(profile?.strength?.ownedEquipment ?? []);
   const sessionsPerWeek = profile?.strength?.sessionsPerWeek ?? 2;
   const today = ymdOf(new Date());
   const week = plan ? weekOf(plan, today) : undefined;
@@ -51,10 +54,24 @@ export default function StrengthScreen() {
           2×/Woche, an deine Trainingsphase angepasst. {STRENGTH_NOTES.benefit}
         </Text>
 
-        <Text style={[styles.label, { color: p.subtext }]}>Ausrüstung</Text>
+        <Text style={[styles.label, { color: p.subtext }]}>
+          Welche Ausrüstung hast du? (ohne Auswahl: Körpergewicht)
+        </Text>
         <View style={styles.chipWrap}>
-          <EquipChip label="Studio / Gewichte" selected={equipment === 'gym'} onPress={() => setEquipment('gym')} p={p} />
-          <EquipChip label="Körpergewicht / zuhause" selected={equipment === 'bodyweight'} onPress={() => setEquipment('bodyweight')} p={p} />
+          {(Object.keys(EQUIPMENT_ITEM_LABEL) as EquipmentItem[]).map((item) => (
+            <EquipChip
+              key={item}
+              label={EQUIPMENT_ITEM_LABEL[item]}
+              selected={ownedEquipment.has(item)}
+              onPress={() => {
+                const next = new Set(ownedEquipment);
+                if (next.has(item)) next.delete(item);
+                else next.add(item);
+                setOwnedEquipment(Array.from(next));
+              }}
+              p={p}
+            />
+          ))}
         </View>
 
         {week && (

@@ -8,6 +8,36 @@ import type { PlanPhase, PlanWeek } from '../domain/plan';
 // die VO2max — Nutzen sind Ökonomie, Kraft/Power, Robustheit, Verletzungsschutz.
 
 export type StrengthEquipment = 'gym' | 'bodyweight';
+
+// Granulare Ausrüstungsauswahl fürs Onboarding/die Anzeige (informativ). Die
+// eigentliche Übungsauswahl bleibt bei den zwei evidenzbasierten Bibliotheken
+// unten (GYM/BODYWEIGHT) – sobald IRGENDein Gewicht-Item ausgewählt ist, greift
+// die GYM-Bibliothek (deren Übungen zusätzliche Last voraussetzen), sonst BODYWEIGHT.
+export type EquipmentItem =
+  | 'dumbbell'
+  | 'barbell'
+  | 'kettlebell'
+  | 'band'
+  | 'bench'
+  | 'pullupBar';
+
+export const EQUIPMENT_ITEM_LABEL: Record<EquipmentItem, string> = {
+  dumbbell: 'Kurzhantel',
+  barbell: 'Langhantel',
+  kettlebell: 'Kettlebell',
+  band: 'Widerstandsband',
+  bench: 'Bank',
+  pullupBar: 'Klimmzugstange',
+};
+
+// Items, die auf "echte" Zusatzlast hindeuten -> GYM-Bibliothek. Band/Klimmzug-
+// stange allein reichen nicht (die Bodyweight-Übungen decken das ab).
+const WEIGHTED_ITEMS: ReadonlySet<EquipmentItem> = new Set(['dumbbell', 'barbell', 'kettlebell', 'bench']);
+
+/** Leitet aus der granularen Auswahl ab, welche Übungsbibliothek passt. */
+export function equipmentFromOwnedItems(owned: readonly EquipmentItem[]): StrengthEquipment {
+  return owned.some((i) => WEIGHTED_ITEMS.has(i)) ? 'gym' : 'bodyweight';
+}
 export type StrengthKind = 'foundation' | 'heavy' | 'power' | 'taper';
 export type ExerciseCategory = 'squat' | 'hinge' | 'lunge' | 'calf' | 'single-leg' | 'plyo' | 'core';
 

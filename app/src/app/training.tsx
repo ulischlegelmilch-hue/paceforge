@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { assessTraining, type AdviceLevel } from '@paceforge/core';
+import { assessTraining, terrainAdvice, TERRAIN_LABEL, type AdviceLevel } from '@paceforge/core';
 
 import { usePalette, type Palette } from '@/ui/colors';
 import { useProfileStore } from '@/store/profile';
@@ -42,7 +42,7 @@ export default function TrainingScreen() {
   const profile = useProfileStore((s) => s.profile);
   const setDaysPerWeek = useProfileStore((s) => s.setDaysPerWeek);
   const setStrengthSessions = useProfileStore((s) => s.setStrengthSessions);
-  const setWeekStartDay = useProfileStore((s) => s.setWeekStartDay);
+  const setAvailableDays = useProfileStore((s) => s.setAvailableDays);
 
   if (!profile) {
     return (
@@ -80,26 +80,30 @@ export default function TrainingScreen() {
           Empfohlen für dein Ziel: mindestens {assessment.recommendedRunDays} Tage.
         </Text>
 
-        <Text style={[styles.label, { color: p.subtext }]}>Wochenstart (erster Lauf)</Text>
+        <Text style={[styles.label, { color: p.subtext }]}>Verfügbare Wochentage</Text>
         <View style={styles.chipWrap}>
-          <Chip
-            label="Egal"
-            selected={profile.weekStartDay === undefined}
-            onPress={() => setWeekStartDay(undefined)}
-            p={p}
-          />
-          {WEEKDAY_OPTIONS.map((d) => (
-            <Chip
-              key={d.value}
-              label={d.label}
-              selected={profile.weekStartDay === d.value}
-              onPress={() => setWeekStartDay(d.value)}
-              p={p}
-            />
-          ))}
+          {WEEKDAY_OPTIONS.map((d) => {
+            const set = new Set(profile.availableDays ?? []);
+            const selected = set.has(d.value);
+            return (
+              <Chip
+                key={d.value}
+                label={d.label}
+                selected={selected}
+                onPress={() => {
+                  const next = new Set(set);
+                  if (selected) next.delete(d.value);
+                  else next.add(d.value);
+                  setAvailableDays(next.size > 0 ? Array.from(next) : undefined);
+                }}
+                p={p}
+              />
+            );
+          })}
         </View>
         <Text style={[styles.hint, { color: p.subtext }]}>
-          Verschiebt dein ganzes Wochenmuster (nicht nur den Long Run) auf den gewünschten Rhythmus.
+          Wähle ruhig mehr Tage als du brauchst – wir verteilen deine {daysPerWeek} Trainingstage
+          gleichmäßig darauf. Ohne Auswahl nutzen wir ein Standardmuster (Di/Do/Sa).
         </Text>
 
         <Text style={[styles.label, { color: p.subtext }]}>Krafteinheiten pro Woche</Text>
@@ -124,6 +128,15 @@ export default function TrainingScreen() {
             </View>
           ))}
         </View>
+
+        {profile.goal.courseTerrain && (
+          <View style={[styles.card, { backgroundColor: p.card, borderColor: p.border }]}>
+            <Text style={[styles.cardTitle, { color: p.text }]}>
+              Gelände: {TERRAIN_LABEL[profile.goal.courseTerrain]}
+            </Text>
+            <Text style={[styles.adviceText, { color: p.text }]}>{terrainAdvice(profile.goal.courseTerrain)}</Text>
+          </View>
+        )}
 
         <Pressable
           onPress={() => router.push('/strength')}

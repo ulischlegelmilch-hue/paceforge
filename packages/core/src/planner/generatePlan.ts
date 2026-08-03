@@ -11,7 +11,7 @@ import {
   makeTempo,
 } from './workouts';
 import { generateMaintenancePlan } from './maintenance';
-import { shiftSlotsToWeekStart } from './weekTemplate';
+import { placeRolesOnAvailableDays, shiftSlotsToWeekStart } from './weekTemplate';
 
 // Regelbasierter Plan-Generator (KEIN LLM). Periodisierung base -> build -> peak
 // -> taper; jede Woche folgt einem Tages-Template mit 1 Long Run + 1–2 Qualitäts-
@@ -190,9 +190,17 @@ export function generatePlan(profile: AthleteProfile, options: GenerateOptions =
   const progressWeeks = Math.max(1, totalWeeks - taperCount);
 
   const days = clampDays(profile.daysPerWeek);
-  const template = shiftSlotsToWeekStart(DAY_TEMPLATES[days], profile.weekStartDay);
+  const baseTemplate = DAY_TEMPLATES[days];
+  // Verfügbare Tage (falls gesetzt) haben Vorrang vor der einfachen Rotation:
+  // die Rollen wandern dann auf die tatsächlich nutzbaren Wochentage statt auf
+  // ein fest verdrahtetes Di/Do/Sa-Muster.
+  const template: Slot[] =
+    profile.availableDays && profile.availableDays.length > 0
+      ? placeRolesOnAvailableDays(baseTemplate.map((s) => s.role), profile.availableDays)
+      : shiftSlotsToWeekStart(baseTemplate, profile.weekStartDay);
   const vdot = profile.currentVdot;
   const longDay = profile.longRunDay;
+  const availableDays = profile.availableDays;
 
   const weekStart = startOfWeekSunday(options.startDate ?? new Date());
 
@@ -208,7 +216,10 @@ export function generatePlan(profile: AthleteProfile, options: GenerateOptions =
     // belegt, wird mit diesem Slot getauscht (statt ihn zu überschreiben), damit
     // der Long Run erhalten bleibt und die Tageszahl stimmt.
     const slots: Slot[] = template.map((s) => ({ ...s }));
-    if (longDay !== undefined) {
+    // longRunDay überschreibt den Long-Run-Slot nur, wenn er (bei gesetzten
+    // availableDays) auch tatsächlich verfügbar ist – sonst würde der Long Run
+    // auf einen laut Nutzer nicht nutzbaren Tag rutschen.
+    if (longDay !== undefined && (!availableDays || availableDays.includes(longDay))) {
       const longSlot = slots.find((s) => s.role === 'long');
       if (longSlot && longSlot.dayOfWeek !== longDay) {
         const origDay = longSlot.dayOfWeek;

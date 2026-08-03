@@ -11,7 +11,7 @@ import {
   makeTempo,
 } from './workouts';
 import type { GenerateOptions } from './generatePlan';
-import { shiftSlotsToWeekStart } from './weekTemplate';
+import { placeRolesOnAvailableDays, shiftSlotsToWeekStart } from './weekTemplate';
 
 // Erhaltungs-Plan ("Form halten") — für Läufer:innen mit vorhandener Grundlage,
 // die keinen Wettkampf vorbereiten. Quelle: Recherche Teil 2 (Minetti/Hickson/Seiler).
@@ -117,8 +117,13 @@ export function generateMaintenancePlan(
 ): TrainingPlan {
   const totalWeeks = options.weeks && options.weeks > 0 ? Math.round(options.weeks) : 12;
   const days = clampDays(profile.daysPerWeek);
-  const template = shiftSlotsToWeekStart(MAINT_TEMPLATES[days], profile.weekStartDay);
+  const baseTemplate = MAINT_TEMPLATES[days];
+  const template: Slot[] =
+    profile.availableDays && profile.availableDays.length > 0
+      ? placeRolesOnAvailableDays(baseTemplate.map((s) => s.role), profile.availableDays)
+      : shiftSlotsToWeekStart(baseTemplate, profile.weekStartDay);
   const vdot = profile.currentVdot;
+  const availableDays = profile.availableDays;
   const longDay = profile.longRunDay;
 
   const weeklyM = MAINT_WEEKLY_M[days];
@@ -131,7 +136,7 @@ export function generateMaintenancePlan(
   for (let w = 0; w < totalWeeks; w++) {
     // Long-Run-Tag ggf. auf Wunschtag legen (Slot-Tausch, damit die Tageszahl stimmt).
     const slots: Slot[] = template.map((s) => ({ ...s }));
-    if (longDay !== undefined) {
+    if (longDay !== undefined && (!availableDays || availableDays.includes(longDay))) {
       const longSlot = slots.find((s) => s.role === 'long');
       if (longSlot && longSlot.dayOfWeek !== longDay) {
         const origDay = longSlot.dayOfWeek;

@@ -2,12 +2,25 @@ import { describe, it, expect } from 'vitest';
 import type { AthleteProfile } from '../src/domain/athlete';
 import { generatePlan } from '../src/planner/generatePlan';
 import {
+  equipmentFromOwnedItems,
   hardRunDays,
   strengthKindForPhase,
   strengthOnDay,
   strengthScheduleForWeek,
   strengthSessionsForPhase,
 } from '../src/strength/index';
+
+describe('equipmentFromOwnedItems', () => {
+  it('leitet "gym" ab, sobald ein Gewicht-Item dabei ist', () => {
+    expect(equipmentFromOwnedItems(['dumbbell'])).toBe('gym');
+    expect(equipmentFromOwnedItems(['band', 'kettlebell'])).toBe('gym');
+  });
+
+  it('bleibt "bodyweight" ohne Gewicht-Items (auch mit Band/Klimmzugstange)', () => {
+    expect(equipmentFromOwnedItems([])).toBe('bodyweight');
+    expect(equipmentFromOwnedItems(['band', 'pullupBar'])).toBe('bodyweight');
+  });
+});
 
 describe('strengthKindForPhase', () => {
   it('bildet Laufphasen auf Kraft-Arten ab', () => {

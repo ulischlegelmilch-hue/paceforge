@@ -1,6 +1,9 @@
 // Athleten-Profil & Zieldefinition (Abschnitt 1 der CLAUDE.md).
 // Alle Distanzen in Metern, Zeiten in Sekunden, Pace intern in m/s.
 
+import type { CourseTerrain } from '../advice/terrain';
+import type { EquipmentItem } from '../strength/index';
+
 export type RaceDistance = '5k' | '10k' | 'half' | 'marathon' | 'custom';
 
 export interface Goal {
@@ -20,6 +23,8 @@ export interface Goal {
   weeks?: number;
   /** Optionale Wunsch-Zielzeit in Sekunden. */
   targetTimeSeconds?: number;
+  /** Grobe Geländeeinschätzung der Zielstrecke (nur informativ/Trainings-Hinweis). */
+  courseTerrain?: CourseTerrain;
 }
 
 export type SelfRatedLevel = 'beginner' | 'intermediate' | 'advanced';
@@ -40,6 +45,8 @@ export interface StrengthPrefs {
   /** Krafteinheiten pro Woche (0 = aus). */
   sessionsPerWeek: number;
   equipment: 'gym' | 'bodyweight';
+  /** Granulare Ausrüstungsauswahl (informativ; leitet `equipment` ab). */
+  ownedEquipment?: EquipmentItem[];
 }
 
 export interface AthleteProfile {
@@ -51,17 +58,24 @@ export interface AthleteProfile {
   currentVdot: number;
   /** Verfügbare Trainingstage pro Woche (typ. 3–6). */
   daysPerWeek: number;
-  /** Bevorzugte Wochentage (0=So .. 6=Sa). */
-  preferredDays?: number[];
   /** Wochentag für den Long Run (0=So .. 6=Sa). */
   longRunDay?: number;
   /**
    * Wochentag des ersten Laufs der Trainingswoche (0=So .. 6=Sa). Verschiebt
    * das gesamte Tages-Muster (nicht nur den Long Run) auf den gewünschten
-   * Rhythmus. Ohne Angabe bleibt der bisherige Standard-Anker (Dienstag/Montag
-   * je nach Tagesanzahl) erhalten.
+   * Rhythmus. Wird ignoriert, sobald `availableDays` gesetzt ist. Ohne Angabe
+   * bleibt der bisherige Standard-Anker (Dienstag/Montag je nach Tagesanzahl)
+   * erhalten.
    */
   weekStartDay?: number;
+  /**
+   * Wochentage, an denen grundsätzlich trainiert werden kann (0=So .. 6=Sa).
+   * Wenn gesetzt, werden die `daysPerWeek` Trainingstage aus dieser Menge
+   * gewählt (gleichmäßig verteilt) statt eines festen Di/Do/Sa-Musters –
+   * hat Vorrang vor `weekStartDay`. Weniger Einträge als `daysPerWeek` führt
+   * zu entsprechend weniger tatsächlichen Trainingstagen.
+   */
+  availableDays?: number[];
   device?: { brand: 'garmin'; model?: string };
   units: Units;
   /** Körpergewicht in kg (optional) – für Ernährungs-Gramm-Ziele. */

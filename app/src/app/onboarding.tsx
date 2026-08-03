@@ -11,10 +11,16 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   assessTraining,
+  EQUIPMENT_ITEM_LABEL,
+  equipmentFromOwnedItems,
   paceMpsToPerKm,
+  TERRAIN_LABEL,
+  TERRAIN_RANGE_LABEL,
   vdotFromFitness,
   zonePaceMps,
   type AdviceLevel,
+  type CourseTerrain,
+  type EquipmentItem,
   type FitnessInput,
   type Goal,
   type RaceDistance,
@@ -69,10 +75,22 @@ const WEEKDAY_OPTIONS: { value: number; label: string }[] = [
   { value: 6, label: 'Sa' },
   { value: 0, label: 'So' },
 ];
-const LEVELS: { key: SelfRatedLevel; label: string }[] = [
-  { key: 'beginner', label: 'Einsteiger' },
-  { key: 'intermediate', label: 'Fortgeschritten' },
-  { key: 'advanced', label: 'Ambitioniert' },
+const LEVELS: { key: SelfRatedLevel; label: string; criterion: string }[] = [
+  {
+    key: 'beginner',
+    label: 'Einsteiger',
+    criterion: 'Laufen ist für dich noch neu oder ungewohnt – du läufst nicht regelmäßig am Stück.',
+  },
+  {
+    key: 'intermediate',
+    label: 'Fortgeschritten',
+    criterion: 'Du läufst regelmäßig, mehrmals pro Woche, aber (noch) ohne festen Trainingsplan.',
+  },
+  {
+    key: 'advanced',
+    label: 'Ambitioniert',
+    criterion: 'Du trainierst strukturiert (z. B. Intervalle/Tempoläufe) und läufst regelmäßig größere Distanzen.',
+  },
 ];
 
 type FitnessMode = 'cooper' | 'race' | 'level';
@@ -87,10 +105,16 @@ export default function Onboarding() {
   const [goalMode, setGoalMode] = useState<'race' | 'maintain'>('race');
   const [distance, setDistance] = useState<RaceDistance | null>(null);
   const [weeks, setWeeks] = useState<number | null>(null);
+  const [courseTerrain, setCourseTerrain] = useState<CourseTerrain | null>(null);
+  const [startChoice, setStartChoice] = useState<'today' | 'tomorrow' | 'monday' | 'custom'>('today');
+  const [startDay, setStartDay] = useState('');
+  const [startMonth, setStartMonth] = useState('');
+  const [startYear, setStartYear] = useState('');
   const [days, setDays] = useState<number | null>(null);
-  const [weekStartDay, setWeekStartDay] = useState<number | null>(null);
+  const [availableDays, setAvailableDaysState] = useState<Set<number>>(new Set());
   const [strengthSessions, setStrengthSessions] = useState(2);
-  const [strengthEquipment, setStrengthEquipment] = useState<'gym' | 'bodyweight'>('bodyweight');
+  const [ownedEquipment, setOwnedEquipment] = useState<Set<EquipmentItem>>(new Set());
+  const strengthEquipment = equipmentFromOwnedItems(Array.from(ownedEquipment));
   const [targetTimeSeconds, setTargetTimeSeconds] = useState<number | null>(null);
 
   const [quickText, setQuickText] = useState('');
@@ -132,6 +156,38 @@ export default function Onboarding() {
   const [level, setLevel] = useState<SelfRatedLevel | null>(null);
 
   // Aus der aktuellen Fitness-Eingabe eine FitnessInput bauen (falls valide).
+  // Eigenes Datum aus den drei Ziffernfeldern (nur gültig, wenn vollständig/plausibel).
+  const customStartDate: Date | null = useMemo(() => {
+    const d = parseInt(startDay, 10);
+    const m = parseInt(startMonth, 10);
+    const y = parseInt(startYear, 10);
+    if (!Number.isFinite(d) || !Number.isFinite(m) || !Number.isFinite(y)) return null;
+    if (d < 1 || d > 31 || m < 1 || m > 12 || y < 2000 || y > 2100) return null;
+    const date = new Date(y, m - 1, d);
+    // ungültige Kombinationen (z. B. 31. Feb) rollen in JS über -> Monat prüfen.
+    if (date.getMonth() !== m - 1) return null;
+    return date;
+  }, [startDay, startMonth, startYear]);
+
+  function nextMonday(from: Date): Date {
+    const d = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+    const diff = ((8 - d.getDay()) % 7) || 7; // immer der NÄCHSTE Montag, auch wenn heute Montag ist
+    d.setDate(d.getDate() + diff);
+    return d;
+  }
+
+  const resolvedStartDate: Date = useMemo(() => {
+    const today = new Date();
+    if (startChoice === 'today') return today;
+    if (startChoice === 'tomorrow') {
+      const d = new Date(today);
+      d.setDate(d.getDate() + 1);
+      return d;
+    }
+    if (startChoice === 'monday') return nextMonday(today);
+    return customStartDate ?? today;
+  }, [startChoice, customStartDate]);
+
   const fitness: FitnessInput | null = useMemo(() => {
     const ascent = raceAscent === '' ? 0 : parseInt(raceAscent, 10);
     const ascentField = Number.isFinite(ascent) && ascent > 0 ? { ascentMeters: ascent } : {};
@@ -153,23 +209,28 @@ export default function Onboarding() {
   const previewVdot = fitness ? Math.round(vdotFromFitness(fitness) * 10) / 10 : null;
 
   // Schrittfolge per Schlüssel – im Erhaltungs-Modus entfällt der Zeitrahmen.
-  type StepKey = 'goal' | 'weeks' | 'fitness' | 'days' | 'strength';
+  type StepKey = 'goal' | 'startDate' | 'weeks' | 'terrain' | 'fitness' | 'days' | 'strength';
   const STEP_LABEL: Record<StepKey, string> = {
     goal: 'Ziel',
+    startDate: 'Start',
     weeks: 'Zeitrahmen',
+    terrain: 'Gelände',
     fitness: 'Fitness',
     days: 'Tage',
     strength: 'Kraft',
   };
+  // Gelände-Frage nur sinnvoll, wenn es eine konkrete Zielstrecke gibt (race-Modus).
   const stepKeys: StepKey[] =
     goalMode === 'maintain'
-      ? ['goal', 'fitness', 'days', 'strength']
-      : ['goal', 'weeks', 'fitness', 'days', 'strength'];
+      ? ['goal', 'startDate', 'fitness', 'days', 'strength']
+      : ['goal', 'startDate', 'weeks', 'terrain', 'fitness', 'days', 'strength'];
   const currentKey = stepKeys[Math.min(step, stepKeys.length - 1)];
 
   const canNext =
     (currentKey === 'goal' && (goalMode === 'maintain' || distance !== null)) ||
+    (currentKey === 'startDate' && (startChoice !== 'custom' || customStartDate !== null)) ||
     (currentKey === 'weeks' && weeks !== null) ||
+    (currentKey === 'terrain' && courseTerrain !== null) ||
     (currentKey === 'fitness' && fitness !== null) ||
     (currentKey === 'days' && days !== null) ||
     currentKey === 'strength';
@@ -182,16 +243,36 @@ export default function Onboarding() {
       goal = { mode: 'maintain', distance: 'half' };
     } else {
       if (!distance || !weeks) return;
-      goal = { mode: 'race', distance, weeks, ...(targetTimeSeconds ? { targetTimeSeconds } : {}) };
+      goal = {
+        mode: 'race',
+        distance,
+        weeks,
+        ...(targetTimeSeconds ? { targetTimeSeconds } : {}),
+        ...(courseTerrain ? { courseTerrain } : {}),
+      };
     }
     createProfile({
       goal,
       fitness,
       daysPerWeek: days,
-      ...(weekStartDay !== null ? { weekStartDay } : {}),
-      strength: { sessionsPerWeek: strengthSessions, equipment: strengthEquipment },
+      ...(availableDays.size > 0 ? { availableDays: Array.from(availableDays) } : {}),
+      strength: {
+        sessionsPerWeek: strengthSessions,
+        equipment: strengthEquipment,
+        ...(ownedEquipment.size > 0 ? { ownedEquipment: Array.from(ownedEquipment) } : {}),
+      },
+      startDate: resolvedStartDate,
     });
     router.replace('/');
+  }
+
+  function toggleAvailableDay(d: number) {
+    setAvailableDaysState((prev) => {
+      const next = new Set(prev);
+      if (next.has(d)) next.delete(d);
+      else next.add(d);
+      return next;
+    });
   }
 
   function onNext() {
@@ -208,22 +289,17 @@ export default function Onboarding() {
 
   return (
     <SafeAreaView style={[styles.fill, { backgroundColor: p.bg }]}>
-      {/* Fortschritt */}
+      {/* Fortschritt: Balken pro Schritt + Label nur für den aktuellen Schritt
+          (bei jetzt bis zu 7 Schritten laufen sonst die Beschriftungen ineinander). */}
       <View style={styles.progressRow}>
         {stepKeys.map((key, i) => (
-          <View key={key} style={styles.progressItem}>
-            <View
-              style={[
-                styles.progressDot,
-                { backgroundColor: i <= step ? p.accent : p.border },
-              ]}
-            />
-            <Text style={[styles.progressLabel, { color: i <= step ? p.text : p.subtext }]}>
-              {STEP_LABEL[key]}
-            </Text>
-          </View>
+          <View
+            key={key}
+            style={[styles.progressDot, { backgroundColor: i <= step ? p.accent : p.border }]}
+          />
         ))}
       </View>
+      <Text style={[styles.progressLabel, { color: p.text }]}>{STEP_LABEL[currentKey]}</Text>
 
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         {currentKey === 'goal' && (
@@ -290,6 +366,78 @@ export default function Onboarding() {
           </>
         )}
 
+        {currentKey === 'startDate' && (
+          <>
+            <Text style={[styles.q, { color: p.text }]}>Wann soll dein Plan beginnen?</Text>
+            <Text style={[styles.sub, { color: p.subtext }]}>
+              Wähle ein Startdatum, das für dich passt – du kannst es später jederzeit ändern.
+            </Text>
+            <View style={styles.chipWrap}>
+              <Chip label="Heute" selected={startChoice === 'today'} onPress={() => setStartChoice('today')} p={p} />
+              <Chip
+                label="Morgen"
+                selected={startChoice === 'tomorrow'}
+                onPress={() => setStartChoice('tomorrow')}
+                p={p}
+              />
+              <Chip
+                label="Nächster Montag"
+                selected={startChoice === 'monday'}
+                onPress={() => setStartChoice('monday')}
+                p={p}
+              />
+              <Chip
+                label="Eigenes Datum"
+                selected={startChoice === 'custom'}
+                onPress={() => setStartChoice('custom')}
+                p={p}
+              />
+            </View>
+            {startChoice === 'custom' && (
+              <View style={styles.timeRow}>
+                <TextInput
+                  value={startDay}
+                  onChangeText={(t) => setStartDay(t.replace(/[^0-9]/g, '').slice(0, 2))}
+                  keyboardType="number-pad"
+                  placeholder="TT"
+                  placeholderTextColor={p.subtext}
+                  style={[styles.timeInput, { color: p.text, borderColor: p.border, width: 70 }]}
+                />
+                <Text style={[styles.colon, { color: p.text }]}>.</Text>
+                <TextInput
+                  value={startMonth}
+                  onChangeText={(t) => setStartMonth(t.replace(/[^0-9]/g, '').slice(0, 2))}
+                  keyboardType="number-pad"
+                  placeholder="MM"
+                  placeholderTextColor={p.subtext}
+                  style={[styles.timeInput, { color: p.text, borderColor: p.border, width: 70 }]}
+                />
+                <Text style={[styles.colon, { color: p.text }]}>.</Text>
+                <TextInput
+                  value={startYear}
+                  onChangeText={(t) => setStartYear(t.replace(/[^0-9]/g, '').slice(0, 4))}
+                  keyboardType="number-pad"
+                  placeholder="JJJJ"
+                  placeholderTextColor={p.subtext}
+                  style={[styles.timeInput, { color: p.text, borderColor: p.border, width: 90 }]}
+                />
+              </View>
+            )}
+            {startChoice === 'custom' && customStartDate === null ? (
+              <Text style={[styles.hint, { color: '#d97706' }]}>Bitte ein gültiges Datum eingeben.</Text>
+            ) : (
+              <Text style={[styles.hint, { color: p.subtext }]}>
+                Start: {resolvedStartDate.toLocaleDateString('de-DE', {
+                  weekday: 'long',
+                  day: '2-digit',
+                  month: 'long',
+                  year: 'numeric',
+                })}
+              </Text>
+            )}
+          </>
+        )}
+
         {currentKey === 'weeks' && (
           <>
             <Text style={[styles.q, { color: p.text }]}>Wie lange soll dein Plan laufen?</Text>
@@ -302,6 +450,37 @@ export default function Onboarding() {
                   onPress={() => setWeeks(w)}
                   p={p}
                 />
+              ))}
+            </View>
+          </>
+        )}
+
+        {currentKey === 'terrain' && (
+          <>
+            <Text style={[styles.q, { color: p.text }]}>Wie bergig ist deine Zielstrecke?</Text>
+            <Text style={[styles.sub, { color: p.subtext }]}>
+              Nur eine grobe Einschätzung – hilft uns, gezielt Bergreize in dein Training einzubauen,
+              falls nötig. Du kannst das später jederzeit ändern.
+            </Text>
+            <View style={{ gap: 10 }}>
+              {(['flat', 'rolling', 'moderate', 'hilly'] as CourseTerrain[]).map((t) => (
+                <Pressable
+                  key={t}
+                  onPress={() => setCourseTerrain(t)}
+                  style={[
+                    styles.quickCard,
+                    {
+                      backgroundColor: p.card,
+                      borderColor: courseTerrain === t ? p.accent : p.border,
+                      borderWidth: courseTerrain === t ? 2 : 1,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.subLabel, { color: p.text, textTransform: 'none' }]}>
+                    {TERRAIN_LABEL[t]}
+                  </Text>
+                  <Text style={[styles.quickHintText, { color: p.subtext }]}>{TERRAIN_RANGE_LABEL[t]}</Text>
+                </Pressable>
               ))}
             </View>
           </>
@@ -393,9 +572,23 @@ export default function Onboarding() {
             )}
 
             {fitnessMode === 'level' && (
-              <View style={styles.chipWrap}>
+              <View style={{ gap: 10 }}>
                 {LEVELS.map((l) => (
-                  <Chip key={l.key} label={l.label} selected={level === l.key} onPress={() => setLevel(l.key)} p={p} />
+                  <Pressable
+                    key={l.key}
+                    onPress={() => setLevel(l.key)}
+                    style={[
+                      styles.quickCard,
+                      {
+                        backgroundColor: p.card,
+                        borderColor: level === l.key ? p.accent : p.border,
+                        borderWidth: level === l.key ? 2 : 1,
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.subLabel, { color: p.text, textTransform: 'none' }]}>{l.label}</Text>
+                    <Text style={[styles.quickHintText, { color: p.subtext }]}>{l.criterion}</Text>
+                  </Pressable>
                 ))}
               </View>
             )}
@@ -423,20 +616,29 @@ export default function Onboarding() {
             </View>
 
             <Text style={[styles.subLabel, { color: p.subtext, marginTop: 18 }]}>
-              An welchem Wochentag beginnt deine Trainingswoche (dein erster Lauf)?
+              An welchen Wochentagen kannst du grundsätzlich laufen? (optional)
+            </Text>
+            <Text style={[styles.sub, { color: p.subtext, marginTop: 0, marginBottom: 4 }]}>
+              Wähle ruhig mehr Tage als du brauchst – wir verteilen deine {days ?? '…'} Trainingstage
+              gleichmäßig darauf. Ohne Auswahl nutzen wir ein Standardmuster (Di/Do/Sa).
             </Text>
             <View style={styles.chipWrap}>
-              <Chip label="Egal" selected={weekStartDay === null} onPress={() => setWeekStartDay(null)} p={p} />
               {WEEKDAY_OPTIONS.map((d) => (
                 <Chip
                   key={d.value}
                   label={d.label}
-                  selected={weekStartDay === d.value}
-                  onPress={() => setWeekStartDay(d.value)}
+                  selected={availableDays.has(d.value)}
+                  onPress={() => toggleAvailableDay(d.value)}
                   p={p}
                 />
               ))}
             </View>
+            {days !== null && availableDays.size > 0 && availableDays.size < days && (
+              <Text style={[styles.hint, { color: '#d97706' }]}>
+                Nur {availableDays.size} von {days} gewünschten Tagen ausgewählt – dein Plan bekommt
+                entsprechend weniger Trainingstage.
+              </Text>
+            )}
           </>
         )}
 
@@ -455,11 +657,32 @@ export default function Onboarding() {
                 />
               ))}
             </View>
-            <Text style={[styles.subLabel, { color: p.subtext }]}>Ausrüstung</Text>
+            <Text style={[styles.subLabel, { color: p.subtext }]}>
+              Welche Ausrüstung hast du? (optional – ohne Auswahl trainierst du mit Körpergewicht)
+            </Text>
             <View style={styles.chipWrap}>
-              <Chip label="Studio / Gewichte" selected={strengthEquipment === 'gym'} onPress={() => setStrengthEquipment('gym')} p={p} />
-              <Chip label="Körpergewicht" selected={strengthEquipment === 'bodyweight'} onPress={() => setStrengthEquipment('bodyweight')} p={p} />
+              {(Object.keys(EQUIPMENT_ITEM_LABEL) as EquipmentItem[]).map((item) => (
+                <Chip
+                  key={item}
+                  label={EQUIPMENT_ITEM_LABEL[item]}
+                  selected={ownedEquipment.has(item)}
+                  onPress={() =>
+                    setOwnedEquipment((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(item)) next.delete(item);
+                      else next.add(item);
+                      return next;
+                    })
+                  }
+                  p={p}
+                />
+              ))}
             </View>
+            <Text style={[styles.hint, { color: p.subtext }]}>
+              {strengthEquipment === 'gym'
+                ? 'Deine Krafteinheiten nutzen die verfügbaren Gewichte.'
+                : 'Deine Krafteinheiten laufen mit Körpergewichtsübungen.'}
+            </Text>
 
             {distance && days && (
               <View style={[styles.preview, { backgroundColor: p.card, borderColor: p.border }]}>
@@ -498,11 +721,12 @@ export default function Onboarding() {
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   progressRow: { flexDirection: 'row', paddingHorizontal: 20, paddingTop: 8, gap: 8 },
-  progressItem: { flex: 1, alignItems: 'center', gap: 6 },
-  progressDot: { width: '100%', height: 4, borderRadius: 2 },
-  progressLabel: { fontSize: 12, fontWeight: '600' },
+  progressDot: { flex: 1, height: 4, borderRadius: 2 },
+  progressLabel: { fontSize: 13, fontWeight: '600', paddingHorizontal: 20, paddingTop: 8 },
   scroll: { padding: 24, gap: 18 },
   q: { fontSize: 23, fontWeight: '700', lineHeight: 30 },
+  sub: { fontSize: 14, lineHeight: 20 },
+  hint: { fontSize: 13, marginTop: 4 },
   subLabel: { fontSize: 13, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.4 },
   adviceRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', marginTop: 8, alignSelf: 'stretch' },
   adviceDot: { width: 8, height: 8, borderRadius: 4, marginTop: 6 },

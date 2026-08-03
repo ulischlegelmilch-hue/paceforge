@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import {
   applyAdaptation as applyAdaptationCore,
+  equipmentFromOwnedItems,
   generatePlan,
   gradeAdjustedDistance,
   vdotFromFitness,
@@ -9,6 +10,7 @@ import {
   type AdaptationResult,
   type AthleteProfile,
   type CompletedActivity,
+  type EquipmentItem,
   type FitnessInput,
   type Goal,
   type TrainingPlan,
@@ -27,7 +29,11 @@ interface CreateProfileInput {
   longRunDay?: number;
   /** Wochentag des ersten Laufs der Woche (0=So..6=Sa) – verschiebt das gesamte Tages-Muster. */
   weekStartDay?: number;
+  /** Wochentage, an denen grundsätzlich trainiert werden kann (0=So..6=Sa). */
+  availableDays?: number[];
   strength?: { sessionsPerWeek: number; equipment: 'gym' | 'bodyweight' };
+  /** Gewünschtes Startdatum des Plans (Default: heute). */
+  startDate?: Date;
 }
 
 interface SnapshotInput {
@@ -60,9 +66,11 @@ interface ProfileState {
     ascentMeters?: number;
   }) => void;
   setStrengthEquipment: (equipment: 'gym' | 'bodyweight') => void;
+  setOwnedEquipment: (ownedEquipment: EquipmentItem[]) => void;
   setStrengthSessions: (sessionsPerWeek: number) => void;
   setDaysPerWeek: (daysPerWeek: number) => void;
   setWeekStartDay: (weekStartDay: number | undefined) => void;
+  setAvailableDays: (availableDays: number[] | undefined) => void;
   setWeightKg: (kg: number | undefined) => void;
   hydrateFromSnapshot: (snap: SnapshotInput) => void;
   reset: () => void;
@@ -89,7 +97,7 @@ export const useProfileStore = create<ProfileState>()(
   deviceId: makeDeviceId(),
   lastSyncedAt: null,
   setLastSyncedAt: (at) => set({ lastSyncedAt: at }),
-  createProfile: ({ goal, fitness, daysPerWeek, longRunDay, weekStartDay, strength }) => {
+  createProfile: ({ goal, fitness, daysPerWeek, longRunDay, weekStartDay, availableDays, strength, startDate }) => {
     const profile: AthleteProfile = {
       id: `athlete-${Date.now()}`,
       createdAt: new Date().toISOString(),
@@ -99,10 +107,11 @@ export const useProfileStore = create<ProfileState>()(
       daysPerWeek,
       longRunDay,
       weekStartDay,
+      availableDays,
       units: 'metric',
       strength: strength ?? { sessionsPerWeek: 2, equipment: 'bodyweight' },
     };
-    const plan = generatePlan(profile);
+    const plan = generatePlan(profile, { startDate });
     set({ profile, plan, activities: [] });
     return profile;
   },
@@ -137,6 +146,16 @@ export const useProfileStore = create<ProfileState>()(
       const strength = { sessionsPerWeek: s.profile.strength?.sessionsPerWeek ?? 2, equipment };
       return patchProfile(s, { strength });
     }),
+  setOwnedEquipment: (ownedEquipment) =>
+    set((s) => {
+      if (!s.profile) return s;
+      const strength = {
+        sessionsPerWeek: s.profile.strength?.sessionsPerWeek ?? 2,
+        equipment: equipmentFromOwnedItems(ownedEquipment),
+        ownedEquipment,
+      };
+      return patchProfile(s, { strength });
+    }),
   setStrengthSessions: (sessionsPerWeek) =>
     set((s) => {
       if (!s.profile) return s;
@@ -160,6 +179,20 @@ export const useProfileStore = create<ProfileState>()(
     set((s) => {
       if (!s.profile || !s.plan) return s;
       const profile: AthleteProfile = { ...s.profile, weekStartDay };
+      const startIso = s.plan.weeks[0]?.workouts[0]?.date;
+      const startDate = startIso ? new Date(`${startIso}T00:00:00`) : undefined;
+      const plan = generatePlan(profile, { startDate });
+      return { profile, plan };
+    }),
+  setAvailableDays: (availableDays) =>
+    set((s) => {
+      if (!s.profile || !s.plan) return s;
+      // Nie mehr Trainingstage verlangen, als verfügbare Tage gewählt sind.
+      const daysPerWeek =
+        availableDays && availableDays.length > 0
+          ? Math.min(s.profile.daysPerWeek, availableDays.length)
+          : s.profile.daysPerWeek;
+      const profile: AthleteProfile = { ...s.profile, availableDays, daysPerWeek };
       const startIso = s.plan.weeks[0]?.workouts[0]?.date;
       const startDate = startIso ? new Date(`${startIso}T00:00:00`) : undefined;
       const plan = generatePlan(profile, { startDate });

@@ -125,4 +125,15 @@ describe('generateMaintenancePlan', () => {
     expect(shiftedDays).toEqual(baseDays.map((d) => (d + 2) % 7).sort((a, b) => a - b));
     expect(runDays(shifted.weeks[0]!)).toBe(4);
   });
+
+  it('availableDays platziert alle Trainingstage innerhalb der verfügbaren Menge', () => {
+    const avail = [1, 3, 5, 0];
+    const plan = generateMaintenancePlan(profile({ availableDays: avail }), { startDate: FIXED_START, weeks: 1 });
+    const training = plan.weeks[0]!.workouts.filter((w) => w.workout.kind !== 'rest');
+    expect(training).toHaveLength(4);
+    for (const w of training) {
+      expect(avail).toContain(w.dayOfWeek);
+    }
+    expect(training.filter((w) => w.workout.kind === 'long')).toHaveLength(1);
+  });
 });
