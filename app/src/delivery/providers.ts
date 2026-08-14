@@ -3,8 +3,9 @@ import { fitFileProvider } from './FitFileProvider';
 import { GarminApiProvider } from './GarminApiProvider';
 
 // Registry der Auslieferungs-Provider in Prioritätsreihenfolge. Die App fragt den
-// ersten verfügbaren ab. Solange die Garmin-API pausiert ist, greift automatisch
-// der FIT-Datei-Provider. Ein späterer API-Provider wird hier einfach vorangestellt.
+// ersten verfügbaren ab: Garmin Connect direkt, wenn Backend erreichbar UND Konto
+// verbunden ist (siehe GarminApiProvider.isAvailable()), sonst der immer verfügbare
+// FIT-Datei-Export als Fallback.
 export const deliveryProviders: WorkoutDeliveryProvider[] = [
   new GarminApiProvider(),
   fitFileProvider,

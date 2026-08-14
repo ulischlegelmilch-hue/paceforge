@@ -17,6 +17,16 @@ Fastify-Backend (TypeScript, ESM). Teilt sich die Domain-/Logik-Typen mit der Ap
   das nicht zum gespeicherten Stand, antwortet der Server mit **409** + dem aktuellen
   Serverstand (Konflikt: ein anderes Gerät hat inzwischen geschrieben). `?force=1`
   überschreibt bewusst.
+- `GET /api/garmin/status?deviceId=` → `{ configured, connected, username?, connectedAt? }`.
+  `configured` zeigt, ob `GARMIN_TOKEN_ENCRYPTION_KEY` gesetzt ist.
+- `POST /api/garmin/login` `{ deviceId, username, password }` — meldet sich einmalig bei
+  Garmin Connect an (inoffizielle Web-API, siehe `src/garmin.ts`) und speichert nur die
+  resultierenden Session-Tokens verschlüsselt; das Passwort wird nicht persistiert.
+  2FA/Sicherheitsabfragen werden nicht unterstützt → dann **401**.
+- `POST /api/garmin/disconnect` `{ deviceId }` — löscht die gespeicherte Session.
+- `POST /api/garmin/push-workout` `{ deviceId, workout, date }` — überträgt ein Workout
+  in den Garmin-Connect-Kalender des Nutzers (von dort synct Garmin es selbst aufs
+  Handgelenk). **404** ohne Verbindung, **502** bei Garmin-seitigem Fehler.
 
 ## Start
 
@@ -46,9 +56,16 @@ anlegen, „REST API"-URL + Token kopieren, im Render-Dashboard als
 `GET /healthz` zeigt danach `storage: "redis"`. Kein zusätzliches SDK nötig — die
 Anbindung (`src/storage.ts`) spricht die REST-API direkt per `fetch` an.
 
-## Noch offen (Phase 2, gesperrt)
+## Garmin-Connect-Anbindung (inoffiziell)
 
-- **Garmin Training API / OAuth-Provider** — braucht einen echten Garmin-Developer-
-  Zugang (Programm derzeit pausiert). Hier entsteht später der OAuth-Flow + ein
-  serverseitiger `WorkoutDeliveryProvider`; App und Plan-Engine bleiben durch das
-  bestehende Interface unberührt.
+Die offizielle Garmin Training API ist für Einzelentwickler pausiert (siehe
+Projekt-`CLAUDE.md`). Statt darauf zu warten, spricht `src/garmin.ts` die
+reverse-engineerte, undokumentierte Garmin-Connect-Web-API an (`garmin-connect`-npm-
+Paket) — echte, kabellose Übertragung aufs Handgelenk, aber technisch gegen Garmins
+Nutzungsbedingungen und ohne Garantie, dass Garmin die private API nicht ändert.
+
+Setup: `GARMIN_TOKEN_ENCRYPTION_KEY` im Dashboard setzen (zufälliger langer String,
+z.B. `openssl rand -hex 32`) — ohne diesen Wert bleibt `/api/garmin/login` mit **503**
+deaktiviert. Session-Tokens landen in derselben Ablage wie Sync-Snapshots (Upstash,
+sonst In-Memory und weg nach Neustart), aber unter eigenem Key-Präfix
+(`src/garminStore.ts`) und AES-256-GCM-verschlüsselt (`src/tokenCrypto.ts`).

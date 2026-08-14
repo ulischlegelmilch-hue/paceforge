@@ -3,7 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../src/app';
 import { MemoryStore } from '../src/storage';
 
-describe('Sync + Garmin-Gerüst', () => {
+describe('Sync', () => {
   let app: FastifyInstance;
   let store: MemoryStore;
   beforeAll(async () => {
@@ -92,16 +92,5 @@ describe('Sync + Garmin-Gerüst', () => {
   it('healthz nennt die Art der Sync-Ablage', async () => {
     const res = await app.inject({ method: 'GET', url: '/healthz' });
     expect(res.json()).toEqual({ ok: true, storage: 'memory' });
-  });
-
-  it('Garmin ist ohne Zugangsdaten nicht konfiguriert', async () => {
-    delete process.env.GARMIN_CLIENT_ID;
-    delete process.env.GARMIN_CLIENT_SECRET;
-    const status = await app.inject({ method: 'GET', url: '/api/garmin/status' });
-    expect(status.statusCode).toBe(200);
-    expect(status.json().configured).toBe(false);
-
-    const connect = await app.inject({ method: 'GET', url: '/api/garmin/connect' });
-    expect(connect.statusCode).toBe(501);
   });
 });

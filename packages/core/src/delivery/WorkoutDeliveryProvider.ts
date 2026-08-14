@@ -11,15 +11,19 @@ export interface DeliveryInstructions {
 }
 
 export interface ExportResult {
-  fileUri: string;                    // Ablageort der erzeugten FIT-Datei
-  fileName: string;
-  bytes: number;
+  fileUri?: string;                   // Ablageort der erzeugten FIT-Datei (Datei-Provider)
+  fileName?: string;
+  bytes?: number;
+  message?: string;                   // menschenlesbare Erfolgsmeldung (API-Provider, keine Datei)
 }
 
 export interface WorkoutDeliveryProvider {
   readonly id: string;                // 'fit-file' | 'garmin-api' | ...
   readonly displayName: string;
-  exportWorkout(workout: Workout, opts?: { fileName?: string }): Promise<ExportResult>;
+  exportWorkout(
+    workout: Workout,
+    opts?: { fileName?: string; scheduledDate?: string },
+  ): Promise<ExportResult>;
   getDeliveryInstructions(): DeliveryInstructions;
   isAvailable(): Promise<boolean>;
 }

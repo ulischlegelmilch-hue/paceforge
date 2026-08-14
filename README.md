@@ -16,7 +16,7 @@ npm-Workspaces (TypeScript strict überall):
 |---|---|
 | `packages/core` (`@paceforge/core`) | Framework-agnostische Kernlogik, komplett unit-getestet: VDOT-Engine, Plan-Generierung, Adaption, FIT-Encode/Decode, Kraft- & Ernährungs-Module, Coaching-Tipps, Kalender-Export, NL-Zielparser. |
 | `app` (`@paceforge/app`) | React-Native/Expo-App (SDK 57, expo-router). |
-| `server` (`@paceforge/server`) | Fastify-Backend (Phase 2): `/api/parse-goal` (LLM + Regel-Fallback), Sync, Garmin-OAuth-Gerüst. |
+| `server` (`@paceforge/server`) | Fastify-Backend (Phase 2): `/api/parse-goal` (LLM + Regel-Fallback), Sync, inoffizielle Garmin-Connect-Anbindung (Login + Workout-Push). |
 
 `packages/core` ist die einzige Wahrheit für die Trainingslogik und wird von App **und** Server geteilt.
 
@@ -61,10 +61,20 @@ npm run typecheck
 
 - **Offline-first:** Ohne `EXPO_PUBLIC_API_BASE_URL` läuft alles lokal (Persistenz via
   expo-sqlite; Web nutzt In-Memory). Backend-Aufrufe haben immer einen lokalen Fallback.
-- **Austauschbare Auslieferung:** `WorkoutDeliveryProvider`-Interface – aktuell FIT-Datei
-  (`FitFileProvider`); ein `GarminApiProvider` (Phase 2) lässt sich ohne UI-/Plan-Änderung einhängen.
+- **Austauschbare Auslieferung:** `WorkoutDeliveryProvider`-Interface – Datei-Export
+  (`FitFileProvider`, immer verfügbar) **und**, mit Backend + verbundenem Garmin-Konto,
+  `GarminApiProvider` (direkte Übertragung via inoffizielle Garmin-Connect-API, siehe unten). Die
+  App wählt automatisch den ersten verfügbaren Provider – kein Unterschied für Plan-Engine/UI.
 - **FIT:** offizielles `@garmin/fitsdk` (Encode/Decode), im `@paceforge/core/fit`-Subpfad, damit es
   nur bei Bedarf gebündelt wird.
+- **Garmin-Connect-Anbindung (inoffiziell):** Die offizielle Garmin Training API ist für
+  Einzelentwickler pausiert (siehe `CLAUDE.md`), daher nutzt `GarminApiProvider` die
+  reverse-engineerte, undokumentierte Garmin-Connect-Web-API (`garmin-connect`-npm-Paket) für
+  echten, kabellosen Uhr-Sync. Bewusst akzeptiertes Risiko: verstößt technisch gegen Garmins
+  Nutzungsbedingungen und kann jederzeit ohne Vorwarnung brechen. Das Garmin-Passwort wird nie
+  gespeichert, nur die resultierenden Session-Tokens (AES-256-GCM-verschlüsselt, Server braucht
+  dafür `GARMIN_TOKEN_ENCRYPTION_KEY`). Ohne verbundenes Garmin-Konto fällt die App automatisch
+  auf den FIT-Datei-Export zurück.
 
 ## Evidenzbasis & wichtige Hinweise
 
@@ -90,6 +100,8 @@ FIT-Round-Trip, Kraft/Ernährung, Coaching-Tipps, Kalender, NL-Parser). Server: 
 
 - Test auf echtem Gerät/Emulator.
 - LLM-Pfad mit echtem `ANTHROPIC_API_KEY` (Fallback ist getestet).
-- Echte Garmin-Training-API (OAuth) – Developer-Zugang nötig; Gerüst steht.
-- Backend-Deploy (z. B. Render) + Sync-Persistenz auf eine DB (aktuell In-Memory).
+- Offizielle Garmin-Training-API (OAuth) – Developer-Zugang nötig, aktuell nicht offen für
+  Einzelentwickler; die inoffizielle Garmin-Connect-Anbindung (siehe oben) ist fertig implementiert.
+- Backend-Deploy (z. B. Render) + Sync-Persistenz auf eine DB (aktuell In-Memory, außer Upstash
+  konfiguriert) + `GARMIN_TOKEN_ENCRYPTION_KEY` setzen, sonst bleibt die Garmin-Anbindung aus.
 - App-Icon-Grafik.

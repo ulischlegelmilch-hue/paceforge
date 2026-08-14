@@ -1,16 +1,25 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import { parseGoalSmart } from './parseGoalLLM';
 import { registerSync } from './sync';
-import { registerGarmin } from './garmin';
+import { registerGarmin, type GarminConnectClient } from './garmin';
 import { createSnapshotStore, type SnapshotStore } from './storage';
+import { createGarminSessionStore, type GarminSessionStore } from './garminStore';
 
 // Baut die Fastify-App OHNE zu lauschen – so kann sie im Test per app.inject()
 // angesprochen werden. Das Lauschen passiert nur in index.ts.
-// `store` ist injizierbar (Tests); ohne Angabe entscheidet die Umgebung
-// (Upstash-Redis wenn konfiguriert, sonst In-Memory).
-export function buildApp(opts: { store?: SnapshotStore } = {}): FastifyInstance {
+// `store`/`garminStore`/`garminClientFactory` sind injizierbar (Tests); ohne
+// Angabe entscheidet die Umgebung (Upstash-Redis wenn konfiguriert, sonst
+// In-Memory) bzw. wird die echte garmin-connect-Bibliothek verwendet.
+export function buildApp(
+  opts: {
+    store?: SnapshotStore;
+    garminStore?: GarminSessionStore;
+    garminClientFactory?: () => Promise<GarminConnectClient>;
+  } = {},
+): FastifyInstance {
   const app = Fastify({ logger: false });
   const store = opts.store ?? createSnapshotStore();
+  const garminStore = opts.garminStore ?? createGarminSessionStore();
 
   // CORS offen (die mobile App / der Web-Simulator greifen von woanders zu).
   app.addHook('onRequest', (_req, reply, done) => {
@@ -35,9 +44,9 @@ export function buildApp(opts: { store?: SnapshotStore } = {}): FastifyInstance 
     return { parsed: result, source };
   });
 
-  // Cross-Device-Sync + Garmin-OAuth-Gerüst (Phase 2).
+  // Cross-Device-Sync + inoffizielle Garmin-Connect-Anbindung (Phase 2).
   registerSync(app, store);
-  registerGarmin(app);
+  registerGarmin(app, garminStore, opts.garminClientFactory);
 
   return app;
 }

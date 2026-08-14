@@ -8,6 +8,7 @@ export * from './domain/activity';
 
 // Delivery-Abstraktion
 export * from './delivery/WorkoutDeliveryProvider';
+export * from './garmin/workoutMapper';
 
 // VDOT-Engine
 export * from './vdot/formulas';

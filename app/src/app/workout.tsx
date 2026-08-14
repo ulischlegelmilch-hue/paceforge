@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -55,16 +55,29 @@ export default function WorkoutScreen() {
   }
 
   const { workout } = scheduled;
-  const date = new Date(scheduled.date);
+  const scheduledDate = scheduled.date;
+  const date = new Date(scheduledDate);
   const [exporting, setExporting] = useState(false);
-  const instructions = fitFileProvider.getDeliveryInstructions();
+  const [instructions, setInstructions] = useState(() => fitFileProvider.getDeliveryInstructions());
+
+  useEffect(() => {
+    let cancelled = false;
+    void activeDeliveryProvider().then((provider) => {
+      if (!cancelled) setInstructions(provider.getDeliveryInstructions());
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function onExport() {
     try {
       setExporting(true);
       const provider = await activeDeliveryProvider();
-      const result = await provider.exportWorkout(workout);
-      if (!(await fitFileProvider.isAvailable())) {
+      const result = await provider.exportWorkout(workout, { scheduledDate });
+      if (result.message) {
+        Alert.alert('Übertragen', result.message);
+      } else if (result.fileName && !(await fitFileProvider.isAvailable())) {
         Alert.alert('FIT-Datei erstellt', `Gespeichert als ${result.fileName} (${result.bytes} Bytes).`);
       }
     } catch (e) {

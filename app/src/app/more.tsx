@@ -1,12 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { usePalette } from '@/ui/colors';
 import { useProfileStore } from '@/store/profile';
 import { hasBackend } from '@/config';
 import { pullSnapshot, pushSnapshot } from '@/api/sync';
+import { garminDisconnect, garminLogin, getGarminStatus, type GarminStatus } from '@/api/garmin';
 
 // Konsolidiert Cloud-Sync, Zurücksetzen und "Über & Quellen" – vorher lange
 // Einzel-Buttons am Ende der Home-Seite, jetzt über das Zahnrad im Header erreichbar.
@@ -22,6 +23,50 @@ export default function MoreScreen() {
   const setLastSyncedAt = useProfileStore((s) => s.setLastSyncedAt);
   const reset = useProfileStore((s) => s.reset);
   const [syncBusy, setSyncBusy] = useState(false);
+
+  const [garminStatus, setGarminStatus] = useState<GarminStatus | null>(null);
+  const [garminBusy, setGarminBusy] = useState(false);
+  const [garminUsername, setGarminUsername] = useState('');
+  const [garminPassword, setGarminPassword] = useState('');
+
+  useEffect(() => {
+    if (!hasBackend) return;
+    void getGarminStatus(deviceId)
+      .then(setGarminStatus)
+      .catch(() => setGarminStatus(null));
+  }, [deviceId]);
+
+  async function onGarminConnect() {
+    if (!garminUsername.trim() || !garminPassword) {
+      Alert.alert('Angaben fehlen', 'Bitte Garmin-Benutzername und Passwort eingeben.');
+      return;
+    }
+    try {
+      setGarminBusy(true);
+      await garminLogin(deviceId, garminUsername.trim(), garminPassword);
+      setGarminPassword('');
+      const status = await getGarminStatus(deviceId);
+      setGarminStatus(status);
+      Alert.alert('Verbunden', 'Garmin Connect ist jetzt verbunden. Workouts lassen sich direkt auf die Uhr übertragen.');
+    } catch (e) {
+      Alert.alert('Verbindung fehlgeschlagen', e instanceof Error ? e.message : 'Unbekannter Fehler.');
+    } finally {
+      setGarminBusy(false);
+    }
+  }
+
+  async function onGarminDisconnect() {
+    try {
+      setGarminBusy(true);
+      await garminDisconnect(deviceId);
+      const status = await getGarminStatus(deviceId);
+      setGarminStatus(status);
+    } catch (e) {
+      Alert.alert('Trennen fehlgeschlagen', e instanceof Error ? e.message : 'Unbekannter Fehler.');
+    } finally {
+      setGarminBusy(false);
+    }
+  }
 
   async function onSyncPush(force = false) {
     try {
@@ -124,6 +169,66 @@ export default function MoreScreen() {
           </View>
         )}
 
+        {hasBackend && (
+          <View style={[styles.card, { backgroundColor: p.card, borderColor: p.border }]}>
+            <Text style={[styles.cardLabel, { color: p.subtext }]}>Garmin Connect</Text>
+            {garminStatus?.connected ? (
+              <>
+                <Text style={[styles.syncId, { color: p.subtext }]}>
+                  Verbunden als {garminStatus.username}
+                  {garminStatus.connectedAt ? ` · seit ${new Date(garminStatus.connectedAt).toLocaleDateString('de-DE')}` : ''}
+                </Text>
+                <Pressable
+                  onPress={() => void onGarminDisconnect()}
+                  disabled={garminBusy}
+                  style={[styles.syncBtnOutline, { borderColor: p.accent, opacity: garminBusy ? 0.6 : 1 }]}
+                >
+                  {garminBusy ? (
+                    <ActivityIndicator color={p.accent} />
+                  ) : (
+                    <Text style={[styles.syncBtnText, { color: p.accent }]}>Trennen</Text>
+                  )}
+                </Pressable>
+              </>
+            ) : (
+              <>
+                <Text style={[styles.syncId, { color: p.subtext, marginBottom: 10 }]}>
+                  Workouts direkt auf die Uhr übertragen (inoffizielle Anbindung – dein Passwort wird nicht
+                  gespeichert, nur die Anmeldung selbst).
+                </Text>
+                <TextInput
+                  value={garminUsername}
+                  onChangeText={setGarminUsername}
+                  placeholder="Garmin-Benutzername / E-Mail"
+                  placeholderTextColor={p.subtext}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  style={[styles.input, { color: p.text, borderColor: p.border }]}
+                />
+                <TextInput
+                  value={garminPassword}
+                  onChangeText={setGarminPassword}
+                  placeholder="Passwort"
+                  placeholderTextColor={p.subtext}
+                  secureTextEntry
+                  style={[styles.input, { color: p.text, borderColor: p.border }]}
+                />
+                <Pressable
+                  onPress={() => void onGarminConnect()}
+                  disabled={garminBusy}
+                  style={[styles.syncBtn, { backgroundColor: p.accent, opacity: garminBusy ? 0.6 : 1 }]}
+                >
+                  {garminBusy ? (
+                    <ActivityIndicator color={p.accentText} />
+                  ) : (
+                    <Text style={[styles.syncBtnText, { color: p.accentText }]}>Verbinden</Text>
+                  )}
+                </Pressable>
+              </>
+            )}
+          </View>
+        )}
+
         <Pressable
           onPress={() => router.push('/about')}
           style={[styles.rowBtn, { backgroundColor: p.card, borderColor: p.border }]}
@@ -152,6 +257,7 @@ const styles = StyleSheet.create({
   syncBtn: { flex: 1, borderRadius: 12, paddingVertical: 12, alignItems: 'center', minHeight: 44, justifyContent: 'center' },
   syncBtnOutline: { flex: 1, borderRadius: 12, borderWidth: 1.5, paddingVertical: 12, alignItems: 'center', minHeight: 44, justifyContent: 'center' },
   syncBtnText: { fontSize: 14, fontWeight: '700' },
+  input: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, marginBottom: 10 },
   rowBtn: {
     flexDirection: 'row',
     justifyContent: 'space-between',

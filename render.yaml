@@ -24,10 +24,11 @@ services:
       # Im Render-Dashboard setzen (nicht committen).
       - key: ANTHROPIC_API_KEY
         sync: false
-      # Optional (Phase 2, sobald Garmin-Developer-Zugang besteht):
-      - key: GARMIN_CLIENT_ID
-        sync: false
-      - key: GARMIN_CLIENT_SECRET
+      # Nötig für die inoffizielle Garmin-Connect-Anbindung (server/src/garmin.ts):
+      # verschlüsselt die gespeicherten Garmin-Session-Tokens (AES-256-GCM). Ohne
+      # diesen Wert bleibt /api/garmin/login mit 503 deaktiviert. Einen zufälligen,
+      # langen String setzen (z.B. `openssl rand -hex 32`) und NICHT committen.
+      - key: GARMIN_TOKEN_ENCRYPTION_KEY
         sync: false
       # Optional: dauerhafte Sync-Snapshot-Ablage (Upstash Redis, REST-API).
       # Ohne diese Werte läuft der Server mit In-Memory-Ablage weiter (verliert
