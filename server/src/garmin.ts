@@ -49,7 +49,31 @@ async function defaultClientFactory(): Promise<GarminConnectClient> {
   // Der Konstruktor wirft "Missing credentials", wenn ihm KEIN (auch leeres)
   // Credentials-Objekt übergeben wird - login(username, password) setzt die
   // echten Werte danach ohnehin selbst (siehe GarminConnect.js login()).
-  return new GarminConnect({ username: '', password: '' }) as unknown as GarminConnectClient;
+  const client = new GarminConnect({ username: '', password: '' });
+
+  // TEMP-DIAGNOSE (15.08.2026): "login failed (Ticket not found or MFA)" ist die
+  // eigene, unspezifische Fehlermeldung der Bibliothek - sie verschluckt die
+  // rohe HTML-Antwort von Garmin, die verraten würde, WAS wirklich zurückkam
+  // (z.B. Bot-Check/CAPTCHA statt echtem 2FA). Patcht handlePageTitle/handleMFA
+  // am internen HttpClient, um einen Ausschnitt zu loggen - NICHT dauerhaft
+  // gedacht, nach Diagnose wieder entfernen.
+  const innerClient = (client as unknown as { client?: object }).client;
+  if (innerClient) {
+    const proto = Object.getPrototypeOf(innerClient) as {
+      handlePageTitle: (html: string) => void;
+      __debugPatched?: boolean;
+    };
+    if (!proto.__debugPatched) {
+      proto.__debugPatched = true;
+      const origHandlePageTitle = proto.handlePageTitle;
+      proto.handlePageTitle = function (this: unknown, html: string) {
+        console.log('GARMIN-DEBUG HTML-Ausschnitt:', html.slice(0, 1500));
+        return origHandlePageTitle.call(this, html);
+      };
+    }
+  }
+
+  return client as unknown as GarminConnectClient;
 }
 
 interface StoredTokens {
