@@ -132,6 +132,11 @@ export function registerGarmin(
     } catch (e) {
       // eslint-disable-next-line no-console
       console.error('Garmin-Login fehlgeschlagen:', e instanceof Error ? e.message : e);
+      // TEMP-DIAGNOSE (15.08.2026): kompletten Stacktrace mitloggen, um die genaue
+      // Fehlerstelle in der Bibliothek zu finden - nach Diagnose wieder entfernen.
+      if (e instanceof Error && e.stack) {
+        console.error('GARMIN-DEBUG Stacktrace:', e.stack);
+      }
       return reply.code(401).send({
         error:
           'Anmeldung bei Garmin fehlgeschlagen. Bitte Zugangsdaten prüfen (Zwei-Faktor-Codes/Sicherheitsabfragen ' +
