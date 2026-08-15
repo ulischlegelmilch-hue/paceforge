@@ -90,9 +90,6 @@ async function defaultClientFactory(): Promise<GarminConnectClient> {
     (axiosClient as unknown as { __cookieJarPatched: boolean }).__cookieJarPatched = true;
     const cookies = new Map<string, string>();
     axiosClient.interceptors.request.use((config) => {
-      // TEMP-DIAGNOSE: zeigt, welcher Schritt im Login-Flow zuletzt lief, bevor
-      // die Bibliothek ein verschlucktes 401 als "undefined" durchreicht.
-      console.log('GARMIN-DEBUG Anfrage:', config.method, config.url);
       if (cookies.size > 0) {
         config.headers = { ...config.headers, Cookie: [...cookies].map(([k, v]) => `${k}=${v}`).join('; ') };
       }
