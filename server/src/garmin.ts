@@ -46,7 +46,10 @@ function scheduleUrl(workoutId: number | string): string {
 
 async function defaultClientFactory(): Promise<GarminConnectClient> {
   const { GarminConnect } = await import('garmin-connect');
-  return new GarminConnect() as unknown as GarminConnectClient;
+  // Der Konstruktor wirft "Missing credentials", wenn ihm KEIN (auch leeres)
+  // Credentials-Objekt übergeben wird - login(username, password) setzt die
+  // echten Werte danach ohnehin selbst (siehe GarminConnect.js login()).
+  return new GarminConnect({ username: '', password: '' }) as unknown as GarminConnectClient;
 }
 
 interface StoredTokens {
