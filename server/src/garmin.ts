@@ -34,6 +34,16 @@ export interface GarminConnectClient {
 
 export type GarminClientFactory = () => GarminConnectClient;
 
+// Minimale Ausschnitte der axios-Typen (axios ist nur eine transitive
+// Abhängigkeit über garmin-connect, kein direktes Server-Package) - nur für
+// den Cookie-Jar-Patch in defaultClientFactory unten gebraucht.
+interface RequestConfigLike {
+  headers?: Record<string, string>;
+}
+interface ResponseLike {
+  headers?: Record<string, unknown>;
+}
+
 // Der Schedule-Endpunkt gehört (wie WORKOUT()) zur "connectapi"-Variante der
 // privaten API, die diese Bibliothek für addWorkout() nutzt - siehe
 // node_modules/garmin-connect UrlClass.WORKOUT(). Es gibt dafür keine
@@ -51,35 +61,49 @@ async function defaultClientFactory(): Promise<GarminConnectClient> {
   // echten Werte danach ohnehin selbst (siehe GarminConnect.js login()).
   const client = new GarminConnect({ username: '', password: '' });
 
-  // TEMP-DIAGNOSE (15.08.2026): "login failed (Ticket not found or MFA)" ist die
-  // eigene, unspezifische Fehlermeldung der Bibliothek - sie verschluckt die
-  // rohe HTTP-Antwort von Garmin, die verraten würde, WAS wirklich zurückkam
-  // (z.B. Bot-Check/CAPTCHA statt echtem 2FA, oder eine Weiterleitung ohne Body).
-  // Hängt einen Response-Interceptor an den internen axios-Client, um Status +
-  // Ausschnitt jeder Antwort während des Login-Flows zu loggen - NICHT dauerhaft
-  // gedacht, nach Diagnose wieder entfernen.
-  const innerClient = (client as unknown as { client?: { client?: { interceptors: { response: { use: Function } } } } })
-    .client;
+  // Die Bibliothek verwaltet KEINE Cookies zwischen den Requests des mehrstufigen
+  // Login-Flows (kein Set-Cookie-Handling in HttpClient.js) - Garmins SSO-Server
+  // verlangt aber offenbar Sitzungs-Cookie-Kontinuität zwischen dem Laden der
+  // Anmeldeseite (die den CSRF-Token liefert) und dem Absenden der Zugangsdaten,
+  // sonst weist er die Anfrage mit 401 zurück. Die Bibliothek verschluckt dieses
+  // 401 intern still (ihr eigener Token-Refresh-Interceptor behandelt jedes 401
+  // ohne vorhandenen oauth2Token als "nichts zu tun" statt es durchzureichen),
+  // wodurch am Ende nur die nichtssagende Meldung "Ticket not found or MFA"
+  // übrig bleibt. Einfacher In-Memory-Cookie-Jar über axios-Interceptors behebt
+  // die fehlende Sitzungskontinuität.
+  const innerClient = (
+    client as unknown as {
+      client?: {
+        client?: {
+          interceptors: {
+            request: { use: (fn: (config: RequestConfigLike) => RequestConfigLike) => void };
+            response: { use: (fn: (res: ResponseLike) => ResponseLike) => void };
+          };
+        };
+      };
+    }
+  ).client;
   const axiosClient = innerClient?.client;
-  if (axiosClient && !(axiosClient as unknown as { __debugPatched?: boolean }).__debugPatched) {
-    (axiosClient as unknown as { __debugPatched: boolean }).__debugPatched = true;
-    axiosClient.interceptors.response.use(
-      (response: { config: { method?: string; url?: string }; status: number; data: unknown }) => {
-        const body = typeof response.data === 'string' ? response.data.slice(0, 800) : response.data;
-        console.log(
-          `GARMIN-DEBUG ${response.config.method?.toUpperCase()} ${response.config.url} -> ${response.status}:`,
-          body,
-        );
-        return response;
-      },
-      (error: { config?: { method?: string; url?: string }; response?: { status: number; data: unknown } }) => {
-        console.log(
-          `GARMIN-DEBUG FEHLER ${error.config?.method?.toUpperCase()} ${error.config?.url} -> ${error.response?.status}:`,
-          typeof error.response?.data === 'string' ? error.response.data.slice(0, 800) : error.response?.data,
-        );
-        return Promise.reject(error);
-      },
-    );
+  if (axiosClient && !(axiosClient as unknown as { __cookieJarPatched?: boolean }).__cookieJarPatched) {
+    (axiosClient as unknown as { __cookieJarPatched: boolean }).__cookieJarPatched = true;
+    const cookies = new Map<string, string>();
+    axiosClient.interceptors.request.use((config) => {
+      if (cookies.size > 0) {
+        config.headers = { ...config.headers, Cookie: [...cookies].map(([k, v]) => `${k}=${v}`).join('; ') };
+      }
+      return config;
+    });
+    axiosClient.interceptors.response.use((response) => {
+      const setCookie = response.headers?.['set-cookie'];
+      if (Array.isArray(setCookie)) {
+        for (const raw of setCookie) {
+          const eq = raw.indexOf('=');
+          const semi = raw.indexOf(';');
+          if (eq > 0) cookies.set(raw.slice(0, eq).trim(), raw.slice(eq + 1, semi > eq ? semi : undefined).trim());
+        }
+      }
+      return response;
+    });
   }
 
   return client as unknown as GarminConnectClient;
