@@ -53,24 +53,33 @@ async function defaultClientFactory(): Promise<GarminConnectClient> {
 
   // TEMP-DIAGNOSE (15.08.2026): "login failed (Ticket not found or MFA)" ist die
   // eigene, unspezifische Fehlermeldung der Bibliothek - sie verschluckt die
-  // rohe HTML-Antwort von Garmin, die verraten würde, WAS wirklich zurückkam
-  // (z.B. Bot-Check/CAPTCHA statt echtem 2FA). Patcht handlePageTitle/handleMFA
-  // am internen HttpClient, um einen Ausschnitt zu loggen - NICHT dauerhaft
+  // rohe HTTP-Antwort von Garmin, die verraten würde, WAS wirklich zurückkam
+  // (z.B. Bot-Check/CAPTCHA statt echtem 2FA, oder eine Weiterleitung ohne Body).
+  // Hängt einen Response-Interceptor an den internen axios-Client, um Status +
+  // Ausschnitt jeder Antwort während des Login-Flows zu loggen - NICHT dauerhaft
   // gedacht, nach Diagnose wieder entfernen.
-  const innerClient = (client as unknown as { client?: object }).client;
-  if (innerClient) {
-    const proto = Object.getPrototypeOf(innerClient) as {
-      handlePageTitle: (html: string) => void;
-      __debugPatched?: boolean;
-    };
-    if (!proto.__debugPatched) {
-      proto.__debugPatched = true;
-      const origHandlePageTitle = proto.handlePageTitle;
-      proto.handlePageTitle = function (this: unknown, html: string) {
-        console.log('GARMIN-DEBUG HTML-Ausschnitt:', html.slice(0, 1500));
-        return origHandlePageTitle.call(this, html);
-      };
-    }
+  const innerClient = (client as unknown as { client?: { client?: { interceptors: { response: { use: Function } } } } })
+    .client;
+  const axiosClient = innerClient?.client;
+  if (axiosClient && !(axiosClient as unknown as { __debugPatched?: boolean }).__debugPatched) {
+    (axiosClient as unknown as { __debugPatched: boolean }).__debugPatched = true;
+    axiosClient.interceptors.response.use(
+      (response: { config: { method?: string; url?: string }; status: number; data: unknown }) => {
+        const body = typeof response.data === 'string' ? response.data.slice(0, 800) : response.data;
+        console.log(
+          `GARMIN-DEBUG ${response.config.method?.toUpperCase()} ${response.config.url} -> ${response.status}:`,
+          body,
+        );
+        return response;
+      },
+      (error: { config?: { method?: string; url?: string }; response?: { status: number; data: unknown } }) => {
+        console.log(
+          `GARMIN-DEBUG FEHLER ${error.config?.method?.toUpperCase()} ${error.config?.url} -> ${error.response?.status}:`,
+          typeof error.response?.data === 'string' ? error.response.data.slice(0, 800) : error.response?.data,
+        );
+        return Promise.reject(error);
+      },
+    );
   }
 
   return client as unknown as GarminConnectClient;
