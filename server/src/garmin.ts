@@ -39,6 +39,8 @@ export type GarminClientFactory = () => GarminConnectClient;
 // den Cookie-Jar-Patch in defaultClientFactory unten gebraucht.
 interface RequestConfigLike {
   headers?: Record<string, string>;
+  method?: string;
+  url?: string;
 }
 interface ResponseLike {
   headers?: Record<string, unknown>;
@@ -88,12 +90,19 @@ async function defaultClientFactory(): Promise<GarminConnectClient> {
     (axiosClient as unknown as { __cookieJarPatched: boolean }).__cookieJarPatched = true;
     const cookies = new Map<string, string>();
     axiosClient.interceptors.request.use((config) => {
+      // TEMP-DIAGNOSE: zeigt, welcher Schritt im Login-Flow zuletzt lief, bevor
+      // die Bibliothek ein verschlucktes 401 als "undefined" durchreicht.
+      console.log('GARMIN-DEBUG Anfrage:', config.method, config.url);
       if (cookies.size > 0) {
         config.headers = { ...config.headers, Cookie: [...cookies].map(([k, v]) => `${k}=${v}`).join('; ') };
       }
       return config;
     });
     axiosClient.interceptors.response.use((response) => {
+      // Die Bibliothek verwandelt manche 401-Antworten intern in ein
+      // aufgelöstes "undefined" statt einer Ablehnung (siehe Kommentar oben) -
+      // muss hier abgefangen werden, sonst stürzt DIESER Patch selbst ab.
+      if (!response) return response;
       const setCookie = response.headers?.['set-cookie'];
       if (Array.isArray(setCookie)) {
         for (const raw of setCookie) {
