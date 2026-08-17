@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { isRepeatBlock, type WorkoutStep } from '@paceforge/core';
+import { currentWeekIndex, isRepeatBlock, ymdOf, type WorkoutStep } from '@paceforge/core';
 
 import { fitFileProvider } from '@/delivery/FitFileProvider';
 import { activeDeliveryProvider } from '@/delivery/providers';
@@ -39,6 +39,8 @@ export default function WorkoutScreen() {
   const params = useLocalSearchParams<{ week?: string; day?: string }>();
   const plan = useProfileStore((s) => s.plan);
   const setWorkoutStatus = useProfileStore((s) => s.setWorkoutStatus);
+  const moveWorkout = useProfileStore((s) => s.moveWorkout);
+  const [moveOpen, setMoveOpen] = useState(false);
 
   const week = Number(params.week);
   const day = Number(params.day);
@@ -59,6 +61,26 @@ export default function WorkoutScreen() {
   const date = new Date(scheduledDate);
   const [exporting, setExporting] = useState(false);
   const [instructions, setInstructions] = useState(() => fitFileProvider.getDeliveryInstructions());
+
+  // "Frei verschieben" ist bewusst auf die aktuelle Woche begrenzt (Uli-Wunsch) -
+  // Tage in künftigen Wochen ändert man über die dauerhaften Trainingstage-
+  // Einstellungen (/training), nicht über einen einmaligen Tausch.
+  const today = ymdOf(new Date());
+  const isCurrentWeek = plan ? currentWeekIndex(plan, today) === week : false;
+  const canMove = isCurrentWeek && scheduledDate >= today;
+  const candidateDays = canMove ? (plan?.weeks[week]?.workouts.filter((wo) => wo.dayOfWeek !== day && wo.date >= today) ?? []) : [];
+
+  function onSkipToggle() {
+    setWorkoutStatus(week, day, scheduled!.status === 'skipped' ? 'planned' : 'skipped');
+  }
+
+  function onMoveTo(toDayOfWeek: number, toDow: string, toName: string) {
+    moveWorkout(week, day, toDayOfWeek);
+    setMoveOpen(false);
+    Alert.alert('Verschoben', `„${workout.name}" ist jetzt am ${toDow} (bisher dort: ${toName}).`, [
+      { text: 'OK', onPress: () => router.back() },
+    ]);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -115,19 +137,47 @@ export default function WorkoutScreen() {
           </View>
         </View>
 
+        {scheduled.status === 'modified' && (
+          <Text style={[styles.movedNote, { color: p.subtext }]}>↔ Diese Einheit wurde verschoben.</Text>
+        )}
+
         {workout.elements.length > 0 && (
+          <View style={styles.actionRow}>
+            <Pressable
+              onPress={() => setWorkoutStatus(week, day, scheduled.status === 'completed' ? 'planned' : 'completed')}
+              style={[
+                styles.doneBtn,
+                scheduled.status === 'completed'
+                  ? { backgroundColor: '#16a34a' }
+                  : { backgroundColor: p.chipBg, borderColor: p.border, borderWidth: 1 },
+              ]}
+            >
+              <Text style={[styles.doneText, { color: scheduled.status === 'completed' ? '#fff' : p.text }]}>
+                {scheduled.status === 'completed' ? '✓ Als erledigt markiert' : 'Als erledigt markieren'}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={onSkipToggle}
+              style={[
+                styles.doneBtn,
+                scheduled.status === 'skipped'
+                  ? { backgroundColor: '#d97706' }
+                  : { backgroundColor: p.chipBg, borderColor: p.border, borderWidth: 1 },
+              ]}
+            >
+              <Text style={[styles.doneText, { color: scheduled.status === 'skipped' ? '#fff' : p.text }]}>
+                {scheduled.status === 'skipped' ? '✕ Fällt aus' : 'Fällt aus / überspringen'}
+              </Text>
+            </Pressable>
+          </View>
+        )}
+
+        {candidateDays.length > 0 && (
           <Pressable
-            onPress={() => setWorkoutStatus(week, day, scheduled.status === 'completed' ? 'planned' : 'completed')}
-            style={[
-              styles.doneBtn,
-              scheduled.status === 'completed'
-                ? { backgroundColor: '#16a34a' }
-                : { backgroundColor: p.chipBg, borderColor: p.border, borderWidth: 1 },
-            ]}
+            onPress={() => setMoveOpen(true)}
+            style={[styles.moveBtn, { borderColor: p.border, backgroundColor: p.chipBg }]}
           >
-            <Text style={[styles.doneText, { color: scheduled.status === 'completed' ? '#fff' : p.text }]}>
-              {scheduled.status === 'completed' ? '✓ Als erledigt markiert' : 'Als erledigt markieren'}
-            </Text>
+            <Text style={[styles.moveText, { color: p.text }]}>↔ Auf einen anderen Tag dieser Woche verschieben</Text>
           </Pressable>
         )}
 
@@ -186,6 +236,29 @@ export default function WorkoutScreen() {
           </View>
         )}
       </ScrollView>
+
+      <Modal visible={moveOpen} transparent animationType="fade" onRequestClose={() => setMoveOpen(false)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setMoveOpen(false)}>
+          <Pressable style={[styles.modalCard, { backgroundColor: p.card }]} onPress={() => {}}>
+            <Text style={[styles.modalTitle, { color: p.text }]}>Tauschen mit …</Text>
+            {candidateDays.map((c) => (
+              <Pressable
+                key={c.date}
+                onPress={() => onMoveTo(c.dayOfWeek, DOW_SHORT[c.dayOfWeek]!, c.workout.name)}
+                style={[styles.modalRow, { borderTopColor: p.border }]}
+              >
+                <Text style={[styles.modalDow, { color: p.text }]}>{DOW_SHORT[c.dayOfWeek]}</Text>
+                <Text style={[styles.modalName, { color: p.subtext }]} numberOfLines={1}>
+                  {c.workout.name}
+                </Text>
+              </Pressable>
+            ))}
+            <Pressable onPress={() => setMoveOpen(false)} style={styles.modalCancel}>
+              <Text style={[styles.modalCancelText, { color: p.accent }]}>Abbrechen</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -199,8 +272,20 @@ const styles = StyleSheet.create({
   date: { fontSize: 14, fontWeight: '600' },
   name: { fontSize: 26, fontWeight: '800', marginTop: 2 },
   summaryRow: { flexDirection: 'row', gap: 10, marginTop: 12 },
-  doneBtn: { marginTop: 14, borderRadius: 12, paddingVertical: 12, alignItems: 'center' },
-  doneText: { fontSize: 14, fontWeight: '700' },
+  movedNote: { fontSize: 13, marginTop: 12, fontStyle: 'italic' },
+  actionRow: { flexDirection: 'row', gap: 10, marginTop: 14 },
+  doneBtn: { flex: 1, borderRadius: 12, paddingVertical: 12, alignItems: 'center' },
+  doneText: { fontSize: 14, fontWeight: '700', textAlign: 'center' },
+  moveBtn: { marginTop: 10, borderWidth: 1, borderRadius: 12, paddingVertical: 12, alignItems: 'center' },
+  moveText: { fontSize: 14, fontWeight: '700' },
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modalCard: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 32, gap: 2 },
+  modalTitle: { fontSize: 17, fontWeight: '700', marginBottom: 8 },
+  modalRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, borderTopWidth: 1 },
+  modalDow: { width: 32, fontSize: 15, fontWeight: '700' },
+  modalName: { flex: 1, fontSize: 15 },
+  modalCancel: { alignItems: 'center', paddingVertical: 14, marginTop: 4 },
+  modalCancelText: { fontSize: 15, fontWeight: '700' },
   summaryPill: { borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 },
   summaryText: { fontSize: 14, fontWeight: '700' },
   card: { borderRadius: 14, borderWidth: 1, padding: 4 },

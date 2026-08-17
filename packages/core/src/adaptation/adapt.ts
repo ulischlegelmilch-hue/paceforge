@@ -4,7 +4,9 @@ import type { PlanWeek, ScheduledWorkout, TrainingPlan } from '../domain/plan';
 import type { StepDuration, Workout } from '../domain/workout';
 import { isRepeatBlock } from '../domain/workout';
 import { generatePlan } from '../planner/generatePlan';
+import { mergePreservingHistory } from '../planner/mergePlan';
 import { gradeAdjustedDistance } from '../grade/index';
+import { isoDay } from '../util/date';
 
 // Soll-Ist-Vergleich (geplant vs. tatsächlich) + regelbasierte Adaptions-Vorschläge.
 // KEIN LLM. Alle Schwellen sind hier zentral dokumentiert.
@@ -89,12 +91,6 @@ export interface AdaptOptions {
   referenceDate?: Date;
 }
 
-function isoDay(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
 
 export function suggestAdaptation(
   plan: TrainingPlan,
@@ -223,7 +219,9 @@ export function applyAdaptation(
   const startDate = startIso ? new Date(`${startIso}T00:00:00`) : undefined;
 
   let newPlan =
-    result.recommendedVdotDelta !== 0 ? generatePlan(newProfile, { startDate }) : plan;
+    result.recommendedVdotDelta !== 0
+      ? mergePreservingHistory(plan, generatePlan(newProfile, { startDate }), opts.referenceDate ?? new Date())
+      : plan;
 
   if (result.reduceNextWeekVolume) {
     newPlan = reduceUpcomingWeek(newPlan, opts.referenceDate ?? new Date());

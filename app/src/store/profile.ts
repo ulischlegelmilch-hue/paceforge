@@ -5,6 +5,7 @@ import {
   equipmentFromOwnedItems,
   generatePlan,
   gradeAdjustedDistance,
+  mergePreservingHistory,
   vdotFromFitness,
   vdotFromRace,
   type AdaptationResult,
@@ -57,10 +58,17 @@ interface ProfileState {
    */
   lastSyncedAt: string | null;
   setLastSyncedAt: (at: string | null) => void;
+  /** ISO-Zeitpunkt des zuletzt von Garmin übernommenen Laufs (Cursor für den nächsten Abruf). */
+  garminLastPullAt: string | null;
+  setGarminLastPullAt: (at: string | null) => void;
   createProfile: (input: CreateProfileInput) => AthleteProfile;
   addActivity: (activity: CompletedActivity) => void;
-  /** Setzt den Status einer geplanten Einheit (z. B. manuell "erledigt" ohne FIT-Import). */
+  /** Wie addActivity, aber für mehrere auf einmal - überspringt bereits vorhandene IDs (z. B. Doppel-Abruf von Garmin). */
+  addActivities: (activities: CompletedActivity[]) => void;
+  /** Setzt den Status einer geplanten Einheit (z. B. manuell "erledigt" ohne FIT-Import, oder "skipped"). */
   setWorkoutStatus: (weekIndex: number, dayOfWeek: number, status: ScheduledWorkoutStatus) => void;
+  /** Tauscht die Inhalte zweier Tage DERSELBEN Woche (Datum/Wochentag jedes Slots bleiben fix). */
+  moveWorkout: (weekIndex: number, fromDayOfWeek: number, toDayOfWeek: number) => void;
   applyAdaptation: (result: AdaptationResult) => void;
   /** Fitness aus einer neuen Bestzeit/Testleistung neu berechnen (VDOT + Plan). */
   updateFitnessFromRace: (input: {
@@ -100,6 +108,8 @@ export const useProfileStore = create<ProfileState>()(
   deviceId: makeDeviceId(),
   lastSyncedAt: null,
   setLastSyncedAt: (at) => set({ lastSyncedAt: at }),
+  garminLastPullAt: null,
+  setGarminLastPullAt: (at) => set({ garminLastPullAt: at }),
   createProfile: ({ goal, fitness, daysPerWeek, longRunDay, weekStartDay, availableDays, strength, startDate }) => {
     const profile: AthleteProfile = {
       id: `athlete-${Date.now()}`,
@@ -119,6 +129,12 @@ export const useProfileStore = create<ProfileState>()(
     return profile;
   },
   addActivity: (activity) => set((s) => ({ activities: [...s.activities, activity] })),
+  addActivities: (newActivities) =>
+    set((s) => {
+      const existingIds = new Set(s.activities.map((a) => a.id));
+      const fresh = newActivities.filter((a) => !existingIds.has(a.id));
+      return fresh.length > 0 ? { activities: [...s.activities, ...fresh] } : s;
+    }),
   setWorkoutStatus: (weekIndex, dayOfWeek, status) =>
     set((s) => {
       if (!s.plan) return s;
@@ -127,6 +143,39 @@ export const useProfileStore = create<ProfileState>()(
           ? w
           : { ...w, workouts: w.workouts.map((wo) => (wo.dayOfWeek === dayOfWeek ? { ...wo, status } : wo)) },
       );
+      return { plan: { ...s.plan, weeks } };
+    }),
+  moveWorkout: (weekIndex, fromDayOfWeek, toDayOfWeek) =>
+    set((s) => {
+      if (!s.plan || fromDayOfWeek === toDayOfWeek) return s;
+      // Status "planned" wird beim Tausch zu "modified", damit spätere Plan-
+      // Neuberechnungen (mergePreservingHistory) den Tausch nicht stillschweigend
+      // rückgängig machen (siehe mergePlan.ts: nur status!=='planned' bleibt erhalten).
+      // Bereits erledigte/übersprungene Tage behalten ihren Status - der reist
+      // mit dem Workout-Inhalt mit, weil er beschreibt, ob DIESES Training
+      // stattgefunden hat.
+      const carryStatus = (status: ScheduledWorkoutStatus): ScheduledWorkoutStatus =>
+        status === 'planned' ? 'modified' : status;
+      const weeks = s.plan.weeks.map((w) => {
+        if (w.index !== weekIndex) return w;
+        const from = w.workouts.find((wo) => wo.dayOfWeek === fromDayOfWeek);
+        const to = w.workouts.find((wo) => wo.dayOfWeek === toDayOfWeek);
+        if (!from || !to) return w;
+        const workouts = w.workouts.map((wo) => {
+          if (wo.dayOfWeek === fromDayOfWeek) {
+            return { ...wo, workout: to.workout, status: carryStatus(to.status), completedActivityId: to.completedActivityId };
+          }
+          if (wo.dayOfWeek === toDayOfWeek) {
+            return { ...wo, workout: from.workout, status: carryStatus(from.status), completedActivityId: from.completedActivityId };
+          }
+          return wo;
+        });
+        return {
+          ...w,
+          workouts,
+          targetWeeklyDistanceMeters: workouts.reduce((sum, wo) => sum + (wo.workout.estimatedDistanceMeters ?? 0), 0),
+        };
+      });
       return { plan: { ...s.plan, weeks } };
     }),
   applyAdaptation: (result) =>
@@ -150,7 +199,8 @@ export const useProfileStore = create<ProfileState>()(
       // Plan mit den neuen Pace-Zonen neu generieren, Startdatum erhalten.
       const startIso = s.plan?.weeks[0]?.workouts[0]?.date;
       const startDate = startIso ? new Date(`${startIso}T00:00:00`) : undefined;
-      const plan = generatePlan(profile, { startDate });
+      let plan = generatePlan(profile, { startDate });
+      if (s.plan) plan = mergePreservingHistory(s.plan, plan);
       return { profile, plan };
     }),
   setStrengthEquipment: (equipment) =>
@@ -185,7 +235,7 @@ export const useProfileStore = create<ProfileState>()(
       const profile: AthleteProfile = { ...s.profile, daysPerWeek: days };
       const startIso = s.plan.weeks[0]?.workouts[0]?.date;
       const startDate = startIso ? new Date(`${startIso}T00:00:00`) : undefined;
-      const plan = generatePlan(profile, { startDate });
+      const plan = mergePreservingHistory(s.plan, generatePlan(profile, { startDate }));
       return { profile, plan };
     }),
   setWeekStartDay: (weekStartDay) =>
@@ -194,7 +244,7 @@ export const useProfileStore = create<ProfileState>()(
       const profile: AthleteProfile = { ...s.profile, weekStartDay };
       const startIso = s.plan.weeks[0]?.workouts[0]?.date;
       const startDate = startIso ? new Date(`${startIso}T00:00:00`) : undefined;
-      const plan = generatePlan(profile, { startDate });
+      const plan = mergePreservingHistory(s.plan, generatePlan(profile, { startDate }));
       return { profile, plan };
     }),
   setAvailableDays: (availableDays) =>
@@ -208,7 +258,7 @@ export const useProfileStore = create<ProfileState>()(
       const profile: AthleteProfile = { ...s.profile, availableDays, daysPerWeek };
       const startIso = s.plan.weeks[0]?.workouts[0]?.date;
       const startDate = startIso ? new Date(`${startIso}T00:00:00`) : undefined;
-      const plan = generatePlan(profile, { startDate });
+      const plan = mergePreservingHistory(s.plan, generatePlan(profile, { startDate }));
       return { profile, plan };
     }),
   setWeightKg: (kg) => set((s) => patchProfile(s, { weightKg: kg })),
@@ -219,7 +269,7 @@ export const useProfileStore = create<ProfileState>()(
       activities: snap.activities ?? [],
       ...(snap.updatedAt ? { lastSyncedAt: snap.updatedAt } : {}),
     }),
-  reset: () => set({ profile: null, plan: null, activities: [], lastSyncedAt: null }),
+  reset: () => set({ profile: null, plan: null, activities: [], lastSyncedAt: null, garminLastPullAt: null }),
     }),
     {
       name: 'paceforge-store',
@@ -231,6 +281,7 @@ export const useProfileStore = create<ProfileState>()(
         activities: s.activities,
         deviceId: s.deviceId,
         lastSyncedAt: s.lastSyncedAt,
+        garminLastPullAt: s.garminLastPullAt,
       }),
     },
   ),

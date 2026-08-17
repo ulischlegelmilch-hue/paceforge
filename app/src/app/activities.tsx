@@ -8,6 +8,8 @@ import { usePalette } from '@/ui/colors';
 import { assessmentColor, assessmentLabel, formatDistance, formatDuration } from '@/ui/format';
 import { useProfileStore } from '@/store/profile';
 import { pickAndDecodeActivity } from '@/delivery/importActivity';
+import { pullGarminActivities } from '@/sync/autoPullGarmin';
+import { hasBackend } from '@/config';
 
 export default function ActivitiesScreen() {
   const p = usePalette();
@@ -17,6 +19,7 @@ export default function ActivitiesScreen() {
   const addActivity = useProfileStore((s) => s.addActivity);
   const applyAdaptation = useProfileStore((s) => s.applyAdaptation);
   const [busy, setBusy] = useState(false);
+  const [pullBusy, setPullBusy] = useState(false);
 
   const adaptation = useMemo(
     () => (plan ? suggestAdaptation(plan, activities) : null),
@@ -35,6 +38,23 @@ export default function ActivitiesScreen() {
     }
   }
 
+  async function onPullGarmin() {
+    try {
+      setPullBusy(true);
+      const count = await pullGarminActivities();
+      Alert.alert(
+        count > 0 ? 'Läufe übernommen' : 'Keine neuen Läufe',
+        count > 0
+          ? `${count} ${count === 1 ? 'Lauf wurde' : 'Läufe wurden'} von Garmin übernommen.`
+          : 'Garmin hat seit dem letzten Abruf keine neuen Läufe gemeldet.',
+      );
+    } catch (e) {
+      Alert.alert('Abruf fehlgeschlagen', e instanceof Error ? e.message : 'Unbekannter Fehler.');
+    } finally {
+      setPullBusy(false);
+    }
+  }
+
   const sorted = [...activities].sort((a, b) => b.startTime.localeCompare(a.startTime));
 
   return (
@@ -45,23 +65,45 @@ export default function ActivitiesScreen() {
         </Pressable>
         <Text style={[styles.title, { color: p.text }]}>Fortschritt</Text>
         <Text style={[styles.sub, { color: p.subtext }]}>
-          Importiere absolvierte Läufe (FIT) – dein Plan passt sich an.
+          Absolvierte Läufe werden bei verbundenem Garmin-Konto automatisch übernommen – dein Plan passt sich an.
         </Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll}>
+        {hasBackend && (
+          <Pressable
+            onPress={onPullGarmin}
+            disabled={pullBusy}
+            style={({ pressed }) => [
+              styles.importBtn,
+              { backgroundColor: p.accent, opacity: pressed || pullBusy ? 0.7 : 1 },
+            ]}
+          >
+            {pullBusy ? (
+              <ActivityIndicator color={p.accentText} />
+            ) : (
+              <Text style={[styles.importText, { color: p.accentText }]}>Von Garmin abrufen</Text>
+            )}
+          </Pressable>
+        )}
+
         <Pressable
           onPress={onImport}
           disabled={busy}
           style={({ pressed }) => [
             styles.importBtn,
-            { backgroundColor: p.accent, opacity: pressed || busy ? 0.7 : 1 },
+            {
+              backgroundColor: 'transparent',
+              borderWidth: 1.5,
+              borderColor: p.accent,
+              opacity: pressed || busy ? 0.7 : 1,
+            },
           ]}
         >
           {busy ? (
-            <ActivityIndicator color={p.accentText} />
+            <ActivityIndicator color={p.accent} />
           ) : (
-            <Text style={[styles.importText, { color: p.accentText }]}>Lauf-Datei importieren</Text>
+            <Text style={[styles.importText, { color: p.accent }]}>Lauf-Datei importieren (FIT)</Text>
           )}
         </Pressable>
 

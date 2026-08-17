@@ -19,6 +19,7 @@ export * from './vdot/predict';
 // Plan-Generierung
 export * from './planner/workouts';
 export * from './planner/generatePlan';
+export * from './planner/mergePlan';
 export * from './planner/maintenance';
 export * from './planner/schedule';
 
@@ -45,3 +46,4 @@ export * from './grade/index';
 
 // Utilities
 export * from './util/pace';
+export * from './util/date';

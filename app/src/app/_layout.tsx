@@ -1,5 +1,12 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { startAutoBackup } from '@/sync/autoBackup';
+import { startAutoPullGarmin } from '@/sync/autoPullGarmin';
+import { startDailyReminders } from '@/notifications/dailyReminder';
+
+startAutoBackup();
+startAutoPullGarmin();
+startDailyReminders();
 
 export default function RootLayout() {
   return (

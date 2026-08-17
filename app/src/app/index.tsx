@@ -172,9 +172,19 @@ export default function HomeScreen() {
               }
               style={({ pressed }) => [{ opacity: pressed ? 0.6 : 1 }]}
             >
-              <Text style={[styles.goalText, { color: p.text }]}>{todayLoc.scheduled.workout.name}</Text>
-              <Text style={[styles.todaySub, { color: p.accent }]}>
-                {formatDistance(todayLoc.scheduled.workout.estimatedDistanceMeters ?? 0)} · zum Öffnen tippen ›
+              <Text
+                style={[
+                  styles.goalText,
+                  { color: p.text },
+                  todayLoc.scheduled.status === 'skipped' && styles.woNameDone,
+                ]}
+              >
+                {todayLoc.scheduled.workout.name}
+              </Text>
+              <Text style={[styles.todaySub, { color: todayLoc.scheduled.status === 'skipped' ? p.subtext : p.accent }]}>
+                {todayLoc.scheduled.status === 'skipped'
+                  ? '✕ Übersprungen · zum Ändern tippen ›'
+                  : `${formatDistance(todayLoc.scheduled.workout.estimatedDistanceMeters ?? 0)} · zum Öffnen tippen ›`}
               </Text>
             </Pressable>
           ) : (
@@ -215,6 +225,8 @@ export default function HomeScreen() {
             {weekTraining.map((sw) => {
               const isToday = sw.date === today;
               const done = sw.status === 'completed';
+              const skipped = sw.status === 'skipped';
+              const moved = sw.status === 'modified';
               return (
                 <Pressable
                   key={sw.date}
@@ -230,8 +242,9 @@ export default function HomeScreen() {
                     {DOW_SHORT[sw.dayOfWeek]}
                   </Text>
                   <View style={[styles.kindDot, { backgroundColor: workoutKindColor(sw.workout.kind) }]} />
+                  {moved && <Text style={[styles.movedTag, { color: p.accent }]}>↔</Text>}
                   <Text
-                    style={[styles.woName, { color: p.text }, done && styles.woNameDone]}
+                    style={[styles.woName, { color: p.text }, (done || skipped) && styles.woNameDone]}
                     numberOfLines={1}
                   >
                     {sw.workout.name}
@@ -241,6 +254,8 @@ export default function HomeScreen() {
                   )}
                   {done ? (
                     <Text style={[styles.doneCheck, { color: '#16a34a' }]}>✓</Text>
+                  ) : skipped ? (
+                    <Text style={[styles.doneCheck, { color: '#d97706' }]}>✕</Text>
                   ) : (
                     <Text style={[styles.woDist, { color: p.subtext }]}>
                       {formatDistance(sw.workout.estimatedDistanceMeters ?? 0)}
@@ -358,6 +373,7 @@ const styles = StyleSheet.create({
   todayStrength: { fontSize: 14, fontWeight: '700', marginTop: 8 },
   todayRest: { fontSize: 16, marginTop: 4 },
   kraftTag: { fontSize: 11, fontWeight: '700', borderWidth: 1, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 1, overflow: 'hidden' },
+  movedTag: { fontSize: 13, fontWeight: '800' },
   weekStrip: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 4 },
   weekStripDay: { alignItems: 'center', gap: 6 },
   weekStripDow: { fontSize: 12, fontWeight: '600' },

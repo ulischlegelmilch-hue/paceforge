@@ -8,6 +8,8 @@ import { useProfileStore } from '@/store/profile';
 import { hasBackend } from '@/config';
 import { pullSnapshot, pushSnapshot } from '@/api/sync';
 import { garminDisconnect, garminLogin, getGarminStatus, type GarminStatus } from '@/api/garmin';
+import { exportBackupJson, importBackupJson } from '@/delivery/exportBackup';
+import { getReminderPermissionStatus, scheduleUpcomingReminders } from '@/notifications/dailyReminder';
 
 // Konsolidiert Cloud-Sync, Zurücksetzen und "Über & Quellen" – vorher lange
 // Einzel-Buttons am Ende der Home-Seite, jetzt über das Zahnrad im Header erreichbar.
@@ -23,11 +25,15 @@ export default function MoreScreen() {
   const setLastSyncedAt = useProfileStore((s) => s.setLastSyncedAt);
   const reset = useProfileStore((s) => s.reset);
   const [syncBusy, setSyncBusy] = useState(false);
+  const [backupBusy, setBackupBusy] = useState(false);
 
   const [garminStatus, setGarminStatus] = useState<GarminStatus | null>(null);
   const [garminBusy, setGarminBusy] = useState(false);
   const [garminUsername, setGarminUsername] = useState('');
   const [garminPassword, setGarminPassword] = useState('');
+
+  const [reminderStatus, setReminderStatus] = useState<'granted' | 'denied' | 'undetermined' | null>(null);
+  const [reminderBusy, setReminderBusy] = useState(false);
 
   useEffect(() => {
     if (!hasBackend) return;
@@ -35,6 +41,29 @@ export default function MoreScreen() {
       .then(setGarminStatus)
       .catch(() => setGarminStatus(null));
   }, [deviceId]);
+
+  useEffect(() => {
+    void getReminderPermissionStatus().then(setReminderStatus).catch(() => setReminderStatus(null));
+  }, []);
+
+  async function onEnableReminders() {
+    try {
+      setReminderBusy(true);
+      await scheduleUpcomingReminders();
+      const status = await getReminderPermissionStatus();
+      setReminderStatus(status);
+      if (status !== 'granted') {
+        Alert.alert(
+          'Keine Berechtigung',
+          'Benachrichtigungen wurden nicht erlaubt. Bitte in den Handy-Einstellungen für PaceForge aktivieren.',
+        );
+      }
+    } catch (e) {
+      Alert.alert('Fehlgeschlagen', e instanceof Error ? e.message : 'Unbekannter Fehler.');
+    } finally {
+      setReminderBusy(false);
+    }
+  }
 
   async function onGarminConnect() {
     if (!garminUsername.trim() || !garminPassword) {
@@ -129,6 +158,42 @@ export default function MoreScreen() {
     }
   }
 
+  async function onExportBackup() {
+    try {
+      setBackupBusy(true);
+      await exportBackupJson(profile, plan, activities);
+    } catch (e) {
+      Alert.alert('Sicherung fehlgeschlagen', e instanceof Error ? e.message : 'Unbekannter Fehler.');
+    } finally {
+      setBackupBusy(false);
+    }
+  }
+
+  async function onImportBackup() {
+    try {
+      setBackupBusy(true);
+      const backup = await importBackupJson();
+      if (!backup) return; // Auswahl abgebrochen
+      Alert.alert(
+        'Sicherung wiederherstellen?',
+        `Sicherung vom ${new Date(backup.exportedAt).toLocaleString('de-DE')} überschreibt deine aktuellen Daten auf diesem Gerät.`,
+        [
+          { text: 'Abbrechen', style: 'cancel' },
+          {
+            text: 'Wiederherstellen',
+            style: 'destructive',
+            onPress: () =>
+              hydrateFromSnapshot({ profile: backup.profile, plan: backup.plan, activities: backup.activities }),
+          },
+        ],
+      );
+    } catch (e) {
+      Alert.alert('Wiederherstellen fehlgeschlagen', e instanceof Error ? e.message : 'Unbekannter Fehler.');
+    } finally {
+      setBackupBusy(false);
+    }
+  }
+
   return (
     <SafeAreaView style={[styles.fill, { backgroundColor: p.bg }]}>
       <ScrollView contentContainerStyle={styles.scroll}>
@@ -142,6 +207,7 @@ export default function MoreScreen() {
             <Text style={[styles.cardLabel, { color: p.subtext }]}>Cloud-Sync</Text>
             <Text style={[styles.syncId, { color: p.subtext }]}>Gerät: {deviceId}</Text>
             <Text style={[styles.syncId, { color: p.subtext }]}>
+              Läuft automatisch im Hintergrund bei Änderungen.{' '}
               {lastSyncedAt
                 ? `Zuletzt gesichert: ${new Date(lastSyncedAt).toLocaleString('de-DE')}`
                 : 'Noch nicht gesichert'}
@@ -168,6 +234,34 @@ export default function MoreScreen() {
             </View>
           </View>
         )}
+
+        <View style={[styles.card, { backgroundColor: p.card, borderColor: p.border }]}>
+          <Text style={[styles.cardLabel, { color: p.subtext }]}>Erinnerungen</Text>
+          <Text style={[styles.syncId, { color: p.subtext, marginBottom: 12 }]}>
+            Täglich um 6 Uhr eine Benachrichtigung, falls Training (Lauf oder Kraft) ansteht – läuft rein lokal auf
+            dem Handy, braucht dafür kein Internet.
+          </Text>
+          <Text style={[styles.syncId, { color: p.subtext, marginBottom: 12 }]}>
+            {reminderStatus === 'granted'
+              ? '✓ Aktiviert.'
+              : reminderStatus === 'denied'
+                ? 'Abgelehnt – bitte in den Handy-Einstellungen für PaceForge erlauben.'
+                : 'Noch nicht erlaubt.'}
+          </Text>
+          {reminderStatus !== 'granted' && (
+            <Pressable
+              onPress={() => void onEnableReminders()}
+              disabled={reminderBusy}
+              style={[styles.syncBtn, { backgroundColor: p.accent, opacity: reminderBusy ? 0.6 : 1 }]}
+            >
+              {reminderBusy ? (
+                <ActivityIndicator color={p.accentText} />
+              ) : (
+                <Text style={[styles.syncBtnText, { color: p.accentText }]}>Erinnerungen erlauben</Text>
+              )}
+            </Pressable>
+          )}
+        </View>
 
         {hasBackend && (
           <View style={[styles.card, { backgroundColor: p.card, borderColor: p.border }]}>
@@ -228,6 +322,34 @@ export default function MoreScreen() {
             )}
           </View>
         )}
+
+        <View style={[styles.card, { backgroundColor: p.card, borderColor: p.border }]}>
+          <Text style={[styles.cardLabel, { color: p.subtext }]}>Lokale Sicherung</Text>
+          <Text style={[styles.syncId, { color: p.subtext, marginBottom: 12 }]}>
+            Als Datei speichern (Drive, Mail, Dateien-App, ...) – unabhängig von der Cloud, z.B. falls die mal nicht
+            erreichbar ist.
+          </Text>
+          <View style={styles.syncRow}>
+            <Pressable
+              onPress={() => void onExportBackup()}
+              disabled={backupBusy}
+              style={[styles.syncBtn, { backgroundColor: p.accent, opacity: backupBusy ? 0.6 : 1 }]}
+            >
+              {backupBusy ? (
+                <ActivityIndicator color={p.accentText} />
+              ) : (
+                <Text style={[styles.syncBtnText, { color: p.accentText }]}>Als Datei sichern</Text>
+              )}
+            </Pressable>
+            <Pressable
+              onPress={() => void onImportBackup()}
+              disabled={backupBusy}
+              style={[styles.syncBtnOutline, { borderColor: p.accent, opacity: backupBusy ? 0.6 : 1 }]}
+            >
+              <Text style={[styles.syncBtnText, { color: p.accent }]}>Aus Datei laden</Text>
+            </Pressable>
+          </View>
+        </View>
 
         <Pressable
           onPress={() => router.push('/about')}

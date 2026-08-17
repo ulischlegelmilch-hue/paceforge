@@ -97,6 +97,8 @@ export default function PlanScreen() {
 
               {training.map((sw) => {
                 const isDone = sw.status === 'completed';
+                const isSkipped = sw.status === 'skipped';
+                const isMoved = sw.status === 'modified';
                 return (
                   <Pressable
                     key={sw.date}
@@ -105,8 +107,9 @@ export default function PlanScreen() {
                   >
                     <Text style={[styles.dow, { color: p.subtext }]}>{DOW_SHORT[sw.dayOfWeek]}</Text>
                     <View style={[styles.kindDot, { backgroundColor: workoutKindColor(sw.workout.kind) }]} />
+                    {isMoved && <Text style={[styles.movedTag, { color: p.accent }]}>↔</Text>}
                     <Text
-                      style={[styles.woName, { color: p.text }, isDone && styles.woNameDone]}
+                      style={[styles.woName, { color: p.text }, (isDone || isSkipped) && styles.woNameDone]}
                       numberOfLines={1}
                     >
                       {sw.workout.name}
@@ -116,6 +119,8 @@ export default function PlanScreen() {
                     )}
                     {isDone ? (
                       <Text style={[styles.doneCheck, { color: '#16a34a' }]}>✓</Text>
+                    ) : isSkipped ? (
+                      <Text style={[styles.doneCheck, { color: '#d97706' }]}>✕</Text>
                     ) : (
                       <Text style={[styles.woDist, { color: p.subtext }]}>
                         {formatDistance(sw.workout.estimatedDistanceMeters ?? 0)}
@@ -162,6 +167,7 @@ const styles = StyleSheet.create({
   woDist: { fontSize: 14, fontVariant: ['tabular-nums'] },
   doneCheck: { fontSize: 16, fontWeight: '800' },
   kraftTag: { fontSize: 11, fontWeight: '700', borderWidth: 1, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 1, overflow: 'hidden' },
+  movedTag: { fontSize: 13, fontWeight: '800' },
   icsBtn: { marginTop: 10, borderWidth: 1.5, borderRadius: 12, paddingVertical: 12, alignItems: 'center', minHeight: 44, justifyContent: 'center' },
   icsText: { fontSize: 15, fontWeight: '700' },
   empty: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 16, padding: 24 },

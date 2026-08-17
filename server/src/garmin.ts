@@ -24,15 +24,67 @@ import { decryptText, encryptText, isEncryptionConfigured } from './tokenCrypto'
 // den wir tatsächlich brauchen - hält die Klasse per Dependency Injection
 // austauschbar, damit Tests NIEMALS echte Netzwerkaufrufe an Garmin machen
 // (siehe garmin.test.ts, das einen Fake-Client einsetzt).
+// Nur der Ausschnitt der von "garmin-connect" gelieferten Aktivitäts-Felder,
+// den mapGarminActivity() tatsächlich braucht (echtes IActivity hat >150 Felder).
+export interface GarminActivitySummary {
+  activityId: number | string;
+  startTimeGMT: string;
+  distance: number;
+  duration: number;
+  averageSpeed: number;
+  averageHR?: number | null;
+  elevationGain?: number | null;
+  activityType?: { typeKey?: string } | null;
+}
+
 export interface GarminConnectClient {
   login(username: string, password: string): Promise<unknown>;
   loadToken(oauth1: unknown, oauth2: unknown): void;
   exportToken(): { oauth1: unknown; oauth2: unknown };
   addWorkout(workout: unknown): Promise<{ workoutId: number | string }>;
   post<T>(url: string, data: unknown): Promise<T>;
+  getActivities(start: number, limit: number): Promise<GarminActivitySummary[]>;
 }
 
 export type GarminClientFactory = () => GarminConnectClient;
+
+// Garmin liefert startTimeGMT als "YYYY-MM-DD HH:mm:ss" ohne Zeitzonen-Suffix
+// (implizit GMT) - hier explizit als UTC interpretieren statt der lokalen
+// Zeitzone des Servers, sonst verschieben sich Läufe je nach Deploy-Region.
+function parseGarminTimestamp(raw: string): string {
+  const iso = raw.includes('T') ? raw : `${raw.replace(' ', 'T')}Z`;
+  const withZone = iso.endsWith('Z') || /[+-]\d\d:\d\d$/.test(iso) ? iso : `${iso}Z`;
+  return new Date(withZone).toISOString();
+}
+
+function isRunningActivity(a: GarminActivitySummary): boolean {
+  return (a.activityType?.typeKey ?? '').toLowerCase().includes('running');
+}
+
+// Bildet Garmins Aktivitäts-JSON auf das geräteunabhängige CompletedActivity-
+// Schema ab (packages/core/src/domain/activity.ts) - ohne FIT-Datei-Download/
+// -Decode, da getActivities() Distanz/Dauer/Puls/Höhenmeter schon fertig liefert.
+export function mapGarminActivity(a: GarminActivitySummary): {
+  id: string;
+  source: 'api';
+  startTime: string;
+  totalDistanceMeters: number;
+  totalDurationSeconds: number;
+  avgPaceMps: number;
+  avgHeartRate?: number;
+  totalAscentMeters?: number;
+} {
+  return {
+    id: `garmin-${a.activityId}`,
+    source: 'api',
+    startTime: parseGarminTimestamp(a.startTimeGMT),
+    totalDistanceMeters: a.distance,
+    totalDurationSeconds: a.duration,
+    avgPaceMps: a.averageSpeed,
+    ...(a.averageHR ? { avgHeartRate: Math.round(a.averageHR) } : {}),
+    ...(a.elevationGain ? { totalAscentMeters: Math.round(a.elevationGain) } : {}),
+  };
+}
 
 // Minimale Ausschnitte der axios-Typen (axios ist nur eine transitive
 // Abhängigkeit über garmin-connect, kein direktes Server-Package) - nur für
@@ -220,6 +272,46 @@ export function registerGarmin(
         error:
           'Übertragung an Garmin fehlgeschlagen. Falls die Verbindung abgelaufen ist, bitte Garmin-Konto in den ' +
           'Einstellungen neu verbinden.',
+      });
+    }
+  });
+
+  app.get('/api/garmin/activities', async (req, reply) => {
+    const { deviceId, sinceIso, limit } = (req.query ?? {}) as {
+      deviceId?: string;
+      sinceIso?: string;
+      limit?: string;
+    };
+    if (!deviceId) return reply.code(400).send({ error: 'deviceId wird benötigt.' });
+
+    const session = await store.get(deviceId);
+    if (!session) {
+      return reply.code(404).send({ error: 'Nicht mit Garmin verbunden.' });
+    }
+
+    try {
+      const tokens = JSON.parse(decryptText(session.encryptedTokens)) as StoredTokens;
+      const client = await clientFactory();
+      client.loadToken(tokens.oauth1, tokens.oauth2);
+
+      const pageSize = Math.max(1, Math.min(50, Number(limit) || 20));
+      const raw = await client.getActivities(0, pageSize);
+      const activities = raw
+        .filter(isRunningActivity)
+        .map(mapGarminActivity)
+        .filter((a) => !sinceIso || a.startTime > sinceIso);
+
+      const freshTokens = client.exportToken();
+      await store.put(deviceId, { ...session, encryptedTokens: encryptText(JSON.stringify(freshTokens)) });
+
+      return { activities };
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('Garmin-Aktivitäten abrufen fehlgeschlagen:', e instanceof Error ? e.message : e);
+      return reply.code(502).send({
+        error:
+          'Abruf der Läufe von Garmin fehlgeschlagen. Falls die Verbindung abgelaufen ist, bitte Garmin-Konto in ' +
+          'den Einstellungen neu verbinden.',
       });
     }
   });

@@ -36,7 +36,13 @@
         }
       ],
       "expo-sharing",
-      "expo-sqlite"
+      "expo-sqlite",
+      [
+        "expo-notifications",
+        {
+          "color": "#e8622c"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

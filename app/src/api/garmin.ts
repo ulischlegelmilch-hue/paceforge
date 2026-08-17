@@ -1,4 +1,4 @@
-import type { Workout } from '@paceforge/core';
+import type { CompletedActivity, Workout } from '@paceforge/core';
 import { API_BASE_URL } from '@/config';
 
 export interface GarminStatus {
@@ -50,4 +50,20 @@ export async function garminPushWorkout(
   const body = (await res.json()) as { workoutId?: number | string; scheduledDate?: string; error?: string };
   if (!res.ok) throw new Error(body.error ?? `Übertragung an Garmin fehlgeschlagen (HTTP ${res.status}).`);
   return { workoutId: body.workoutId!, scheduledDate: body.scheduledDate! };
+}
+
+// Holt absolvierte Läufe direkt von Garmin Connect (server/src/garmin.ts,
+// getActivities() der inoffiziellen Bibliothek) - Alternative zum manuellen
+// FIT-Datei-Import in importActivity.ts, ohne Datei-Export vom Nutzer.
+// `sinceIso` grenzt auf Läufe NACH diesem Zeitpunkt ein (Cursor im Store).
+export async function fetchGarminActivities(
+  deviceId: string,
+  sinceIso?: string,
+): Promise<CompletedActivity[]> {
+  const params = new URLSearchParams({ deviceId });
+  if (sinceIso) params.set('sinceIso', sinceIso);
+  const res = await fetch(`${API_BASE_URL}/api/garmin/activities?${params.toString()}`);
+  const body = (await res.json()) as { activities?: CompletedActivity[]; error?: string };
+  if (!res.ok) throw new Error(body.error ?? `Garmin-Läufe abrufen fehlgeschlagen (HTTP ${res.status}).`);
+  return body.activities ?? [];
 }

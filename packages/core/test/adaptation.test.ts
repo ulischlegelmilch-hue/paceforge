@@ -159,6 +159,32 @@ describe('applyAdaptation', () => {
   });
 });
 
+describe('applyAdaptation – Historie', () => {
+  it('löscht bei einer VDOT-Anpassung nicht den Status bereits erledigter Tage', () => {
+    const base = profile();
+    const plan = generatePlan(base, { startDate: FIXED_START });
+    const day0 = plan.weeks[0]!.workouts[0]!;
+    const planWithHistory = {
+      ...plan,
+      weeks: plan.weeks.map((w, i) => (i !== 0 ? w : {
+        ...w,
+        workouts: w.workouts.map((sw) => (sw.date === day0.date ? { ...sw, status: 'completed' as const } : sw)),
+      })),
+    };
+
+    const result: AdaptationResult = {
+      recommendedVdotDelta: 1,
+      reduceNextWeekVolume: false,
+      consecutiveMissed: 0,
+      assessments: [],
+      notes: [],
+    };
+    const out = applyAdaptation(base, planWithHistory, result, { referenceDate: new Date(2026, 0, 20) });
+    const mergedDay0 = out.plan.weeks[0]!.workouts.find((sw) => sw.date === day0.date)!;
+    expect(mergedDay0.status).toBe('completed');
+  });
+});
+
 describe('applyVdotAdaptation', () => {
   it('erhöht die VDOT gemäß Empfehlung', () => {
     const p = profile();

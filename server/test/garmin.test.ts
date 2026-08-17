@@ -3,7 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { makeEasyRun } from '@paceforge/core';
 import { buildApp } from '../src/app';
 import { MemoryGarminSessionStore } from '../src/garminStore';
-import type { GarminConnectClient } from '../src/garmin';
+import type { GarminActivitySummary, GarminConnectClient } from '../src/garmin';
 
 // Fake-Client statt der echten garmin-connect-Bibliothek - Tests dürfen NIE
 // echte Netzwerkaufrufe an Garmin machen (siehe garmin.ts-Kommentar).
@@ -12,8 +12,10 @@ class FakeGarminClient implements GarminConnectClient {
   loadedTokens: { oauth1: unknown; oauth2: unknown } | null = null;
   addedWorkouts: unknown[] = [];
   posts: { url: string; data: unknown }[] = [];
+  activitiesResponse: GarminActivitySummary[] = [];
   failLogin = false;
   failAdd = false;
+  failGetActivities = false;
 
   async login(username: string, password: string): Promise<unknown> {
     if (this.failLogin) throw new Error('ungültige Zugangsdaten');
@@ -38,6 +40,11 @@ class FakeGarminClient implements GarminConnectClient {
   async post<T>(url: string, data: unknown): Promise<T> {
     this.posts.push({ url, data });
     return {} as T;
+  }
+
+  async getActivities(): Promise<GarminActivitySummary[]> {
+    if (this.failGetActivities) throw new Error('Garmin-API abgelehnt');
+    return this.activitiesResponse;
   }
 }
 
@@ -183,6 +190,108 @@ describe('Garmin-Connect-Anbindung', () => {
       url: '/api/garmin/push-workout',
       payload: { deviceId: 'dev1', workout, date: '2026-08-20' },
     });
+    expect(res.statusCode).toBe(502);
+  });
+
+  it('activities ohne deviceId -> 400', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/garmin/activities' });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('activities ohne Verbindung -> 404', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/garmin/activities?deviceId=unbekannt' });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('activities mappt Läufe und filtert Nicht-Lauf-Aktivitäten raus', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/api/garmin/login',
+      payload: { deviceId: 'dev1', username: 'u', password: 'p' },
+    });
+    fakeClient.activitiesResponse = [
+      {
+        activityId: 111,
+        startTimeGMT: '2026-08-17 06:30:00',
+        distance: 8123,
+        duration: 2460,
+        averageSpeed: 3.3,
+        averageHR: 152.4,
+        elevationGain: 45.2,
+        activityType: { typeKey: 'street_running' },
+      },
+      {
+        activityId: 222,
+        startTimeGMT: '2026-08-16 18:00:00',
+        distance: 15000,
+        duration: 2700,
+        averageSpeed: 5.5,
+        activityType: { typeKey: 'cycling' },
+      },
+    ];
+
+    const res = await app.inject({ method: 'GET', url: '/api/garmin/activities?deviceId=dev1' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      activities: [
+        {
+          id: 'garmin-111',
+          source: 'api',
+          startTime: '2026-08-17T06:30:00.000Z',
+          totalDistanceMeters: 8123,
+          totalDurationSeconds: 2460,
+          avgPaceMps: 3.3,
+          avgHeartRate: 152,
+          totalAscentMeters: 45,
+        },
+      ],
+    });
+    expect(fakeClient.loadedTokens).toEqual({ oauth1: 'fake-oauth1', oauth2: 'fake-oauth2' });
+  });
+
+  it('activities mit sinceIso filtert bereits abgerufene Läufe raus', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/api/garmin/login',
+      payload: { deviceId: 'dev1', username: 'u', password: 'p' },
+    });
+    fakeClient.activitiesResponse = [
+      {
+        activityId: 111,
+        startTimeGMT: '2026-08-17 06:30:00',
+        distance: 8000,
+        duration: 2400,
+        averageSpeed: 3.3,
+        activityType: { typeKey: 'street_running' },
+      },
+      {
+        activityId: 100,
+        startTimeGMT: '2026-08-10 06:30:00',
+        distance: 5000,
+        duration: 1500,
+        averageSpeed: 3.3,
+        activityType: { typeKey: 'street_running' },
+      },
+    ];
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/garmin/activities?deviceId=dev1&sinceIso=2026-08-12T00:00:00.000Z',
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { activities: { id: string }[] };
+    expect(body.activities.map((a) => a.id)).toEqual(['garmin-111']);
+  });
+
+  it('activities meldet Fehler von Garmin als 502', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/api/garmin/login',
+      payload: { deviceId: 'dev1', username: 'u', password: 'p' },
+    });
+    fakeClient.failGetActivities = true;
+
+    const res = await app.inject({ method: 'GET', url: '/api/garmin/activities?deviceId=dev1' });
     expect(res.statusCode).toBe(502);
   });
 });
