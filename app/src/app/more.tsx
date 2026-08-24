@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { usePalette } from '@/ui/colors';
+import { title, eyebrow, body, bodyStrong, caption } from '@/ui/typography';
+import { Card } from '@/ui/components/Card';
+import { Button } from '@/ui/components/Button';
 import { useProfileStore } from '@/store/profile';
 import { hasBackend } from '@/config';
 import { pullSnapshot, pushSnapshot } from '@/api/sync';
@@ -198,50 +201,34 @@ export default function MoreScreen() {
     <SafeAreaView style={[styles.fill, { backgroundColor: p.bg }]}>
       <ScrollView contentContainerStyle={styles.scroll}>
         <Pressable onPress={() => router.back()} hitSlop={12}>
-          <Text style={[styles.back, { color: p.accent }]}>‹ Zurück</Text>
+          <Text style={[caption, { color: p.accent }]}>‹ Zurück</Text>
         </Pressable>
-        <Text style={[styles.title, { color: p.text }]}>Mehr</Text>
+        <Text style={[title, { color: p.text, marginTop: 4 }]}>Mehr</Text>
 
         {hasBackend && (
-          <View style={[styles.card, { backgroundColor: p.card, borderColor: p.border }]}>
-            <Text style={[styles.cardLabel, { color: p.subtext }]}>Cloud-Sync</Text>
-            <Text style={[styles.syncId, { color: p.subtext }]}>Gerät: {deviceId}</Text>
-            <Text style={[styles.syncId, { color: p.subtext }]}>
+          <Card>
+            <Text style={[eyebrow, { color: p.subtext }]}>Cloud-Sync</Text>
+            <Text style={[caption, { color: p.subtext, marginTop: 6 }]}>Gerät: {deviceId}</Text>
+            <Text style={[caption, { color: p.subtext, marginTop: 4, marginBottom: 12 }]}>
               Läuft automatisch im Hintergrund bei Änderungen.{' '}
               {lastSyncedAt
                 ? `Zuletzt gesichert: ${new Date(lastSyncedAt).toLocaleString('de-DE')}`
                 : 'Noch nicht gesichert'}
             </Text>
-            <View style={styles.syncRow}>
-              <Pressable
-                onPress={() => void onSyncPush()}
-                disabled={syncBusy}
-                style={[styles.syncBtn, { backgroundColor: p.accent, opacity: syncBusy ? 0.6 : 1 }]}
-              >
-                {syncBusy ? (
-                  <ActivityIndicator color={p.accentText} />
-                ) : (
-                  <Text style={[styles.syncBtnText, { color: p.accentText }]}>In Cloud sichern</Text>
-                )}
-              </Pressable>
-              <Pressable
-                onPress={onSyncPull}
-                disabled={syncBusy}
-                style={[styles.syncBtnOutline, { borderColor: p.accent, opacity: syncBusy ? 0.6 : 1 }]}
-              >
-                <Text style={[styles.syncBtnText, { color: p.accent }]}>Aus Cloud laden</Text>
-              </Pressable>
+            <View style={styles.row}>
+              <Button title="In Cloud sichern" onPress={() => void onSyncPush()} loading={syncBusy} style={styles.rowBtn} />
+              <Button title="Aus Cloud laden" variant="secondary" onPress={onSyncPull} disabled={syncBusy} style={styles.rowBtn} />
             </View>
-          </View>
+          </Card>
         )}
 
-        <View style={[styles.card, { backgroundColor: p.card, borderColor: p.border }]}>
-          <Text style={[styles.cardLabel, { color: p.subtext }]}>Erinnerungen</Text>
-          <Text style={[styles.syncId, { color: p.subtext, marginBottom: 12 }]}>
+        <Card>
+          <Text style={[eyebrow, { color: p.subtext }]}>Erinnerungen</Text>
+          <Text style={[caption, { color: p.subtext, marginTop: 6, marginBottom: 10 }]}>
             Täglich um 6 Uhr eine Benachrichtigung, falls Training (Lauf oder Kraft) ansteht – läuft rein lokal auf
             dem Handy, braucht dafür kein Internet.
           </Text>
-          <Text style={[styles.syncId, { color: p.subtext, marginBottom: 12 }]}>
+          <Text style={[bodyStrong, { color: p.text, marginBottom: 12 }]}>
             {reminderStatus === 'granted'
               ? '✓ Aktiviert.'
               : reminderStatus === 'denied'
@@ -249,44 +236,24 @@ export default function MoreScreen() {
                 : 'Noch nicht erlaubt.'}
           </Text>
           {reminderStatus !== 'granted' && (
-            <Pressable
-              onPress={() => void onEnableReminders()}
-              disabled={reminderBusy}
-              style={[styles.syncBtn, { backgroundColor: p.accent, opacity: reminderBusy ? 0.6 : 1 }]}
-            >
-              {reminderBusy ? (
-                <ActivityIndicator color={p.accentText} />
-              ) : (
-                <Text style={[styles.syncBtnText, { color: p.accentText }]}>Erinnerungen erlauben</Text>
-              )}
-            </Pressable>
+            <Button title="Erinnerungen erlauben" onPress={() => void onEnableReminders()} loading={reminderBusy} />
           )}
-        </View>
+        </Card>
 
         {hasBackend && (
-          <View style={[styles.card, { backgroundColor: p.card, borderColor: p.border }]}>
-            <Text style={[styles.cardLabel, { color: p.subtext }]}>Garmin Connect</Text>
+          <Card>
+            <Text style={[eyebrow, { color: p.subtext }]}>Garmin Connect</Text>
             {garminStatus?.connected ? (
               <>
-                <Text style={[styles.syncId, { color: p.subtext }]}>
+                <Text style={[caption, { color: p.subtext, marginTop: 6, marginBottom: 12 }]}>
                   Verbunden als {garminStatus.username}
                   {garminStatus.connectedAt ? ` · seit ${new Date(garminStatus.connectedAt).toLocaleDateString('de-DE')}` : ''}
                 </Text>
-                <Pressable
-                  onPress={() => void onGarminDisconnect()}
-                  disabled={garminBusy}
-                  style={[styles.syncBtnOutline, { borderColor: p.accent, opacity: garminBusy ? 0.6 : 1 }]}
-                >
-                  {garminBusy ? (
-                    <ActivityIndicator color={p.accent} />
-                  ) : (
-                    <Text style={[styles.syncBtnText, { color: p.accent }]}>Trennen</Text>
-                  )}
-                </Pressable>
+                <Button title="Trennen" variant="secondary" onPress={() => void onGarminDisconnect()} loading={garminBusy} />
               </>
             ) : (
               <>
-                <Text style={[styles.syncId, { color: p.subtext, marginBottom: 10 }]}>
+                <Text style={[caption, { color: p.subtext, marginTop: 6, marginBottom: 10 }]}>
                   Workouts direkt auf die Uhr übertragen (inoffizielle Anbindung – dein Passwort wird nicht
                   gespeichert, nur die Anmeldung selbst).
                 </Text>
@@ -294,73 +261,46 @@ export default function MoreScreen() {
                   value={garminUsername}
                   onChangeText={setGarminUsername}
                   placeholder="Garmin-Benutzername / E-Mail"
-                  placeholderTextColor={p.subtext}
+                  placeholderTextColor={p.faint}
                   autoCapitalize="none"
                   autoCorrect={false}
-                  style={[styles.input, { color: p.text, borderColor: p.border }]}
+                  style={[styles.input, { color: p.text, backgroundColor: p.surfaceRaised }]}
                 />
                 <TextInput
                   value={garminPassword}
                   onChangeText={setGarminPassword}
                   placeholder="Passwort"
-                  placeholderTextColor={p.subtext}
+                  placeholderTextColor={p.faint}
                   secureTextEntry
-                  style={[styles.input, { color: p.text, borderColor: p.border }]}
+                  style={[styles.input, { color: p.text, backgroundColor: p.surfaceRaised }]}
                 />
-                <Pressable
-                  onPress={() => void onGarminConnect()}
-                  disabled={garminBusy}
-                  style={[styles.syncBtn, { backgroundColor: p.accent, opacity: garminBusy ? 0.6 : 1 }]}
-                >
-                  {garminBusy ? (
-                    <ActivityIndicator color={p.accentText} />
-                  ) : (
-                    <Text style={[styles.syncBtnText, { color: p.accentText }]}>Verbinden</Text>
-                  )}
-                </Pressable>
+                <Button title="Verbinden" onPress={() => void onGarminConnect()} loading={garminBusy} />
               </>
             )}
-          </View>
+          </Card>
         )}
 
-        <View style={[styles.card, { backgroundColor: p.card, borderColor: p.border }]}>
-          <Text style={[styles.cardLabel, { color: p.subtext }]}>Lokale Sicherung</Text>
-          <Text style={[styles.syncId, { color: p.subtext, marginBottom: 12 }]}>
+        <Card>
+          <Text style={[eyebrow, { color: p.subtext }]}>Lokale Sicherung</Text>
+          <Text style={[caption, { color: p.subtext, marginTop: 6, marginBottom: 12 }]}>
             Als Datei speichern (Drive, Mail, Dateien-App, ...) – unabhängig von der Cloud, z.B. falls die mal nicht
             erreichbar ist.
           </Text>
-          <View style={styles.syncRow}>
-            <Pressable
-              onPress={() => void onExportBackup()}
-              disabled={backupBusy}
-              style={[styles.syncBtn, { backgroundColor: p.accent, opacity: backupBusy ? 0.6 : 1 }]}
-            >
-              {backupBusy ? (
-                <ActivityIndicator color={p.accentText} />
-              ) : (
-                <Text style={[styles.syncBtnText, { color: p.accentText }]}>Als Datei sichern</Text>
-              )}
-            </Pressable>
-            <Pressable
-              onPress={() => void onImportBackup()}
-              disabled={backupBusy}
-              style={[styles.syncBtnOutline, { borderColor: p.accent, opacity: backupBusy ? 0.6 : 1 }]}
-            >
-              <Text style={[styles.syncBtnText, { color: p.accent }]}>Aus Datei laden</Text>
-            </Pressable>
+          <View style={styles.row}>
+            <Button title="Als Datei sichern" onPress={() => void onExportBackup()} loading={backupBusy} style={styles.rowBtn} />
+            <Button title="Aus Datei laden" variant="secondary" onPress={() => void onImportBackup()} disabled={backupBusy} style={styles.rowBtn} />
           </View>
-        </View>
+        </Card>
 
-        <Pressable
-          onPress={() => router.push('/about')}
-          style={[styles.rowBtn, { backgroundColor: p.card, borderColor: p.border }]}
-        >
-          <Text style={[styles.rowText, { color: p.text }]}>Über & Quellen</Text>
-          <Text style={{ color: p.subtext }}>›</Text>
+        <Pressable onPress={() => router.push('/about')}>
+          <Card style={styles.linkRow}>
+            <Text style={[bodyStrong, { color: p.text }]}>Über & Quellen</Text>
+            <Text style={{ color: p.subtext }}>›</Text>
+          </Card>
         </Pressable>
 
         <Pressable onPress={reset} style={styles.resetBtn}>
-          <Text style={[styles.resetText, { color: p.subtext }]}>Angaben zurücksetzen</Text>
+          <Text style={[caption, { color: p.subtext }]}>Angaben zurücksetzen</Text>
         </Pressable>
       </ScrollView>
     </SafeAreaView>
@@ -370,26 +310,9 @@ export default function MoreScreen() {
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   scroll: { padding: 20, gap: 14 },
-  back: { fontSize: 16, fontWeight: '600' },
-  title: { fontSize: 26, fontWeight: '800', marginTop: 2, marginBottom: 4 },
-  card: { borderRadius: 16, borderWidth: 1, padding: 18 },
-  cardLabel: { fontSize: 13, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.4 },
-  syncId: { fontSize: 12, marginTop: 4, marginBottom: 12, fontVariant: ['tabular-nums'] },
-  syncRow: { flexDirection: 'row', gap: 10 },
-  syncBtn: { flex: 1, borderRadius: 12, paddingVertical: 12, alignItems: 'center', minHeight: 44, justifyContent: 'center' },
-  syncBtnOutline: { flex: 1, borderRadius: 12, borderWidth: 1.5, paddingVertical: 12, alignItems: 'center', minHeight: 44, justifyContent: 'center' },
-  syncBtnText: { fontSize: 14, fontWeight: '700' },
-  input: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, marginBottom: 10 },
-  rowBtn: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderRadius: 14,
-    borderWidth: 1,
-    paddingVertical: 16,
-    paddingHorizontal: 18,
-  },
-  rowText: { fontSize: 15, fontWeight: '600' },
-  resetBtn: { alignItems: 'center', paddingVertical: 10, marginTop: 8 },
-  resetText: { fontSize: 14 },
+  row: { flexDirection: 'row', gap: 10 },
+  rowBtn: { flex: 1, minHeight: 48 },
+  input: { borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, marginBottom: 10 },
+  linkRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  resetBtn: { alignItems: 'center', paddingVertical: 10, marginTop: 4 },
 });

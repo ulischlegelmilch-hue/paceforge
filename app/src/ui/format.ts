@@ -48,11 +48,11 @@ export function intensityLabel(i: WorkoutIntensity): string {
 }
 
 const PHASE: Record<PlanPhase, { label: string; color: string }> = {
-  base: { label: 'Grundlage', color: '#3b82f6' },
-  build: { label: 'Aufbau', color: '#e8622c' },
-  peak: { label: 'Spitze', color: '#dc2626' },
-  taper: { label: 'Tapering', color: '#16a34a' },
-  maintenance: { label: 'Erhaltung', color: '#0891b2' },
+  base: { label: 'Grundlage', color: '#4C7A9E' },
+  build: { label: 'Aufbau', color: '#C97A3E' },
+  peak: { label: 'Spitze', color: '#B24A3F' },
+  taper: { label: 'Tapering', color: '#4C9468' },
+  maintenance: { label: 'Erhaltung', color: '#4A8791' },
 };
 export function phaseLabel(p: PlanPhase): string {
   return PHASE[p].label;
@@ -69,36 +69,36 @@ export const DOW_SHORT = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
 const WORKOUT_KIND: Record<WorkoutKind, { label: string; color: string; blurb: string }> = {
   easy: {
     label: 'Dauerlauf',
-    color: '#22c55e',
+    color: '#4C9468',
     blurb: 'Lockeres, gleichmäßiges Tempo – baut die aerobe Grundlage auf, ohne den Körper stark zu belasten.',
   },
   long: {
     label: 'Long Run',
-    color: '#8b5cf6',
+    color: '#8B6FB0',
     blurb: 'Der längste Lauf der Woche, meist locker gelaufen – trainiert Ausdauer und mentale Stärke fürs Renntempo.',
   },
   tempo: {
     label: 'Tempolauf',
-    color: '#eab308',
+    color: '#C9A23E',
     blurb: 'Anhaltend zügiges Tempo an der Schwelle – verschiebt den Punkt, an dem Milchsäure sich anstaut, nach oben.',
   },
   interval: {
     label: 'Intervalle',
-    color: '#ef4444',
+    color: '#B2554A',
     blurb: 'Kurze, harte Belastungen mit Trabpausen – steigert die maximale Sauerstoffaufnahme (VO2max).',
   },
   repetition: {
     label: 'Wiederholungen',
-    color: '#ec4899',
+    color: '#B5628A',
     blurb: 'Sehr kurze, sehr schnelle Wiederholungen mit langen Pausen – verbessert Lauftechnik und Renntempo-Gefühl.',
   },
   recovery: {
     label: 'Regeneration',
-    color: '#06b6d4',
+    color: '#4A93A0',
     blurb: 'Sehr lockeres Auslaufen zur aktiven Erholung nach einer harten Einheit.',
   },
-  rest: { label: 'Ruhetag', color: '#94a3b8', blurb: 'Kein Training – Erholung ist Teil des Trainingsreizes.' },
-  race: { label: 'Wettkampf', color: '#e8622c', blurb: 'Der Zielwettkampf oder ein Testrennen im Renntempo.' },
+  rest: { label: 'Ruhetag', color: '#8A8580', blurb: 'Kein Training – Erholung ist Teil des Trainingsreizes.' },
+  race: { label: 'Wettkampf', color: '#C97A3E', blurb: 'Der Zielwettkampf oder ein Testrennen im Renntempo.' },
 };
 
 export function workoutKindLabel(k: WorkoutKind): string {
@@ -132,10 +132,10 @@ export function formatRaceTime(seconds: number): string {
 }
 
 const ASSESSMENT: Record<Assessment, { label: string; color: string }> = {
-  'on-target': { label: 'im Ziel', color: '#16a34a' },
-  faster: { label: 'schneller', color: '#3b82f6' },
-  slower: { label: 'langsamer', color: '#d97706' },
-  incomplete: { label: 'unvollständig', color: '#dc2626' },
+  'on-target': { label: 'im Ziel', color: '#4C9468' },
+  faster: { label: 'schneller', color: '#4C7A9E' },
+  slower: { label: 'langsamer', color: '#C08A3E' },
+  incomplete: { label: 'unvollständig', color: '#B24A3F' },
 };
 export function assessmentLabel(a: Assessment): string {
   return ASSESSMENT[a].label;

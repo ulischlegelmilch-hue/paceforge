@@ -1,6 +1,11 @@
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import AdmZip from 'adm-zip';
 import type { FastifyInstance } from 'fastify';
-import type { Workout } from '@paceforge/core';
+import type { ActivityLap, Workout } from '@paceforge/core';
 import { workoutToGarminPayload } from '@paceforge/core';
+import { decodeActivity } from '@paceforge/core/fit';
 import type { GarminSessionStore } from './garminStore';
 import { decryptText, encryptText, isEncryptionConfigured } from './tokenCrypto';
 
@@ -44,6 +49,8 @@ export interface GarminConnectClient {
   addWorkout(workout: unknown): Promise<{ workoutId: number | string }>;
   post<T>(url: string, data: unknown): Promise<T>;
   getActivities(start: number, limit: number): Promise<GarminActivitySummary[]>;
+  /** Lädt die Original-Aktivitätsdaten (Default-Typ "zip") in `dir` als "{activityId}.zip". */
+  downloadOriginalActivityData(activity: { activityId: number | string }, dir: string): Promise<void>;
 }
 
 export type GarminClientFactory = () => GarminConnectClient;
@@ -64,7 +71,7 @@ function isRunningActivity(a: GarminActivitySummary): boolean {
 // Bildet Garmins Aktivitäts-JSON auf das geräteunabhängige CompletedActivity-
 // Schema ab (packages/core/src/domain/activity.ts) - ohne FIT-Datei-Download/
 // -Decode, da getActivities() Distanz/Dauer/Puls/Höhenmeter schon fertig liefert.
-export function mapGarminActivity(a: GarminActivitySummary): {
+export interface MappedGarminActivity {
   id: string;
   source: 'api';
   startTime: string;
@@ -73,7 +80,11 @@ export function mapGarminActivity(a: GarminActivitySummary): {
   avgPaceMps: number;
   avgHeartRate?: number;
   totalAscentMeters?: number;
-} {
+  laps?: ActivityLap[];
+  gradeAdjustedDistanceMeters?: number;
+}
+
+export function mapGarminActivity(a: GarminActivitySummary): MappedGarminActivity {
   return {
     id: `garmin-${a.activityId}`,
     source: 'api',
@@ -84,6 +95,66 @@ export function mapGarminActivity(a: GarminActivitySummary): {
     ...(a.averageHR ? { avgHeartRate: Math.round(a.averageHR) } : {}),
     ...(a.elevationGain ? { totalAscentMeters: Math.round(a.elevationGain) } : {}),
   };
+}
+
+/** Läuft-Filter + Mapping in einem Schritt, mit optionalem sinceIso-Cursor. */
+function mapRunningActivities(
+  raw: GarminActivitySummary[],
+  sinceIso?: string,
+): { raw: GarminActivitySummary; mapped: MappedGarminActivity }[] {
+  return raw
+    .filter(isRunningActivity)
+    .map((r) => ({ raw: r, mapped: mapGarminActivity(r) }))
+    .filter((x) => !sinceIso || x.mapped.startTime > sinceIso);
+}
+
+/**
+ * Lädt die Original-FIT-Datei einer Garmin-Aktivität (als ZIP, siehe
+ * downloadOriginalActivityData) und reichert die Summary um Laps/grade-
+ * adjusted Distanz an - mit derselben Decode-Logik wie beim manuellen FIT-
+ * Import (app/src/delivery/importActivity.ts), nur serverseitig aufgerufen.
+ * Nicht jede Aktivität hat eine .fit-Datei im Original-Zip (z. B. manuell
+ * erfasste/aus Drittanbietern synchronisierte Läufe enthalten oft nur GPX/TCX)
+ * und die inoffizielle API kann jederzeit brechen - in beiden Fällen bleibt
+ * die Summary unverändert (graceful degradation), der Aufrufer bekommt nie
+ * einen Fehler wegen fehlgeschlagener Anreicherung.
+ */
+async function enrichWithFit(
+  client: GarminConnectClient,
+  activityId: number | string,
+  base: MappedGarminActivity,
+): Promise<MappedGarminActivity> {
+  const dir = await mkdtemp(join(tmpdir(), 'paceforge-garmin-'));
+  try {
+    await client.downloadOriginalActivityData({ activityId }, dir);
+    const zip = new AdmZip(join(dir, `${activityId}.zip`));
+    const fitEntry = zip.getEntries().find((e) => e.entryName.toLowerCase().endsWith('.fit'));
+    if (!fitEntry) return base;
+
+    const decoded = decodeActivity(fitEntry.getData(), { id: base.id, source: 'api' });
+    return {
+      ...base,
+      ...(decoded.laps ? { laps: decoded.laps } : {}),
+      ...(decoded.gradeAdjustedDistanceMeters !== undefined
+        ? { gradeAdjustedDistanceMeters: decoded.gradeAdjustedDistanceMeters }
+        : {}),
+    };
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error(`FIT-Anreicherung für Garmin-Aktivität ${activityId} fehlgeschlagen:`, e instanceof Error ? e.message : e);
+    return base;
+  } finally {
+    await rm(dir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+/** Reichert die ersten `count` Aktivitäten (nach Sortierung, s. Aufrufer) an, Rest bleibt Summary-only. */
+async function maybeEnrich(
+  client: GarminConnectClient,
+  pairs: { raw: GarminActivitySummary; mapped: MappedGarminActivity }[],
+  count: number,
+): Promise<MappedGarminActivity[]> {
+  return Promise.all(pairs.map((x, i) => (i < count ? enrichWithFit(client, x.raw.activityId, x.mapped) : x.mapped)));
 }
 
 // Minimale Ausschnitte der axios-Typen (axios ist nur eine transitive
@@ -277,10 +348,12 @@ export function registerGarmin(
   });
 
   app.get('/api/garmin/activities', async (req, reply) => {
-    const { deviceId, sinceIso, limit } = (req.query ?? {}) as {
+    const { deviceId, sinceIso, limit, offset, enrich } = (req.query ?? {}) as {
       deviceId?: string;
       sinceIso?: string;
       limit?: string;
+      offset?: string;
+      enrich?: string;
     };
     if (!deviceId) return reply.code(400).send({ error: 'deviceId wird benötigt.' });
 
@@ -295,11 +368,10 @@ export function registerGarmin(
       client.loadToken(tokens.oauth1, tokens.oauth2);
 
       const pageSize = Math.max(1, Math.min(50, Number(limit) || 20));
-      const raw = await client.getActivities(0, pageSize);
-      const activities = raw
-        .filter(isRunningActivity)
-        .map(mapGarminActivity)
-        .filter((a) => !sinceIso || a.startTime > sinceIso);
+      const pageOffset = Math.max(0, Number(offset) || 0);
+      const raw = await client.getActivities(pageOffset, pageSize);
+      const pairs = mapRunningActivities(raw, sinceIso);
+      const activities = enrich === 'true' ? await maybeEnrich(client, pairs, pairs.length) : pairs.map((x) => x.mapped);
 
       const freshTokens = client.exportToken();
       await store.put(deviceId, { ...session, encryptedTokens: encryptText(JSON.stringify(freshTokens)) });
@@ -311,6 +383,73 @@ export function registerGarmin(
       return reply.code(502).send({
         error:
           'Abruf der Läufe von Garmin fehlgeschlagen. Falls die Verbindung abgelaufen ist, bitte Garmin-Konto in ' +
+          'den Einstellungen neu verbinden.',
+      });
+    }
+  });
+
+  // Einmaliger Vollimport der Garmin-Historie (statt nur der letzten ≤50 wie
+  // /api/garmin/activities): paginiert über mehrere Seiten, harte Obergrenze
+  // maxPages als Schutz gegen die inoffizielle, ratenlimit-empfindliche API.
+  // FIT-Anreicherung nur für die neuesten `enrichLatest` Läufe (teuer: 1
+  // zusätzlicher Download+Decode je Aktivität, Render-Timeout im Blick behalten).
+  app.get('/api/garmin/activities/backfill', async (req, reply) => {
+    const { deviceId, sinceIso, maxPages, pageSize: pageSizeParam, enrichLatest } = (req.query ?? {}) as {
+      deviceId?: string;
+      sinceIso?: string;
+      maxPages?: string;
+      pageSize?: string;
+      enrichLatest?: string;
+    };
+    if (!deviceId) return reply.code(400).send({ error: 'deviceId wird benötigt.' });
+
+    const session = await store.get(deviceId);
+    if (!session) {
+      return reply.code(404).send({ error: 'Nicht mit Garmin verbunden.' });
+    }
+
+    const pageSize = Math.max(1, Math.min(50, Number(pageSizeParam) || 50));
+    const maxPagesN = Math.max(1, Math.min(20, Number(maxPages) || 6));
+    const enrichCount = Math.max(0, Math.min(50, Number(enrichLatest) || 20));
+
+    try {
+      const tokens = JSON.parse(decryptText(session.encryptedTokens)) as StoredTokens;
+      const client = await clientFactory();
+      client.loadToken(tokens.oauth1, tokens.oauth2);
+
+      const collected: { raw: GarminActivitySummary; mapped: MappedGarminActivity }[] = [];
+      let pagesFetched = 0;
+      let partial = false;
+      for (let page = 0; page < maxPagesN; page++) {
+        let raw: GarminActivitySummary[];
+        try {
+          raw = await client.getActivities(page * pageSize, pageSize);
+        } catch (e) {
+          // eslint-disable-next-line no-console
+          console.error(`Garmin-Backfill Seite ${page} fehlgeschlagen:`, e instanceof Error ? e.message : e);
+          if (page === 0) throw e; // kompletter Fehlschlag -> 502 wie gewohnt
+          partial = true;
+          break;
+        }
+        pagesFetched++;
+        if (raw.length === 0) break;
+        collected.push(...mapRunningActivities(raw, sinceIso));
+        if (raw.length < pageSize) break; // letzte Seite erreicht
+      }
+
+      collected.sort((a, b) => b.mapped.startTime.localeCompare(a.mapped.startTime));
+      const activities = await maybeEnrich(client, collected, enrichCount);
+
+      const freshTokens = client.exportToken();
+      await store.put(deviceId, { ...session, encryptedTokens: encryptText(JSON.stringify(freshTokens)) });
+
+      return { activities, pagesFetched, partial };
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('Garmin-Backfill fehlgeschlagen:', e instanceof Error ? e.message : e);
+      return reply.code(502).send({
+        error:
+          'Abruf des Garmin-Verlaufs fehlgeschlagen. Falls die Verbindung abgelaufen ist, bitte Garmin-Konto in ' +
           'den Einstellungen neu verbinden.',
       });
     }

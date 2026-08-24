@@ -14,12 +14,14 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",
     "@paceforge/core": "*",
+    "adm-zip": "^0.6.0",
     "fastify": "^5.2.0",
     "garmin-connect": "^1.6.2",
     "tsx": "^4.19.2",
     "zod": "^3.25.0"
   },
   "devDependencies": {
+    "@types/adm-zip": "^0.5.8",
     "@types/node": "^22.10.0",
     "typescript": "^5.6.3",
     "vitest": "^2.1.8"

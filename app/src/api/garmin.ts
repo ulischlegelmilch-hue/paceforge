@@ -67,3 +67,15 @@ export async function fetchGarminActivities(
   if (!res.ok) throw new Error(body.error ?? `Garmin-Läufe abrufen fehlgeschlagen (HTTP ${res.status}).`);
   return body.activities ?? [];
 }
+
+// Einmaliger Vollimport der Garmin-Historie (server/src/garmin.ts,
+// /api/garmin/activities/backfill) - im Unterschied zu fetchGarminActivities()
+// nicht auf die letzten ≤50 Läufe begrenzt, sondern paginiert über mehrere
+// Seiten. Kann je nach Kontohistorie einige Sekunden dauern.
+export async function fetchGarminActivitiesBackfill(deviceId: string): Promise<CompletedActivity[]> {
+  const params = new URLSearchParams({ deviceId });
+  const res = await fetch(`${API_BASE_URL}/api/garmin/activities/backfill?${params.toString()}`);
+  const body = (await res.json()) as { activities?: CompletedActivity[]; error?: string };
+  if (!res.ok) throw new Error(body.error ?? `Garmin-Verlauf importieren fehlgeschlagen (HTTP ${res.status}).`);
+  return body.activities ?? [];
+}

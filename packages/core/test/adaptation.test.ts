@@ -103,6 +103,18 @@ describe('suggestAdaptation', () => {
     expect(res.recommendedVdotDelta).toBe(0);
   });
 
+  it('entlastet NICHT, wenn trotz verpasster Plan-Einheiten genug eigene Läufe stattfanden', () => {
+    // Dieselbe Ausgangslage wie oben (≥2 verpasste Plan-Einheiten in Folge bis
+    // 20.1.), aber zwei eigene Läufe in den letzten 7 Tagen davor, jeweils an
+    // laut Plan freien Tagen (14.1./19.1. sind Ruhetage) - zählen trotzdem als
+    // eigenes Training und dürfen die verpassten Plan-Tage nicht überschreiben.
+    const freeRuns = [activity(6000, 3.0, '2026-01-14'), activity(5000, 3.0, '2026-01-19')];
+    const res = suggestAdaptation(plan, freeRuns, { referenceDate: new Date(2026, 0, 20) });
+    expect(res.consecutiveMissed).toBeGreaterThanOrEqual(2);
+    expect(res.reduceNextWeekVolume).toBe(false);
+    expect(res.notes.some((n) => /keine Entlastung nötig/i.test(n))).toBe(true);
+  });
+
   it('empfiehlt nichts, wenn alles im Plan liegt', () => {
     const res = suggestAdaptation(plan, [], { referenceDate: new Date(2026, 0, 1) });
     expect(res.recommendedVdotDelta).toBe(0);

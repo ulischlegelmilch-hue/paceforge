@@ -8,6 +8,9 @@ import { fitFileProvider } from '@/delivery/FitFileProvider';
 import { activeDeliveryProvider } from '@/delivery/providers';
 
 import { usePalette, type Palette } from '@/ui/colors';
+import { title, heading, body, caption, button as buttonType } from '@/ui/typography';
+import { Card } from '@/ui/components/Card';
+import { Button } from '@/ui/components/Button';
 import {
   DOW_SHORT,
   durationText,
@@ -24,10 +27,10 @@ function StepRow({ step, p }: { step: WorkoutStep; p: Palette }) {
     <View style={[styles.stepRow, { borderColor: p.border }]}>
       <View style={[styles.dot, { backgroundColor: p.accent }]} />
       <View style={{ flex: 1 }}>
-        <Text style={[styles.stepTitle, { color: p.text }]}>
+        <Text style={[body, { color: p.text, fontFamily: buttonType.fontFamily }]}>
           {intensityLabel(step.intensity)} · {durationText(step.duration)}
         </Text>
-        <Text style={[styles.stepTarget, { color: p.subtext }]}>{targetText(step.target)}</Text>
+        <Text style={[caption, { color: p.subtext, marginTop: 2 }]}>{targetText(step.target)}</Text>
       </View>
     </View>
   );
@@ -62,9 +65,6 @@ export default function WorkoutScreen() {
   const [exporting, setExporting] = useState(false);
   const [instructions, setInstructions] = useState(() => fitFileProvider.getDeliveryInstructions());
 
-  // "Frei verschieben" ist bewusst auf die aktuelle Woche begrenzt (Uli-Wunsch) -
-  // Tage in künftigen Wochen ändert man über die dauerhaften Trainingstage-
-  // Einstellungen (/training), nicht über einen einmaligen Tausch.
   const today = ymdOf(new Date());
   const isCurrentWeek = plan ? currentWeekIndex(plan, today) === week : false;
   const canMove = isCurrentWeek && scheduledDate >= today;
@@ -112,86 +112,81 @@ export default function WorkoutScreen() {
   return (
     <SafeAreaView style={[styles.fill, { backgroundColor: p.bg }]}>
       <ScrollView contentContainerStyle={styles.scroll}>
-        <Text onPress={() => router.back()} style={[styles.back, { color: p.accent }]}>
+        <Text onPress={() => router.back()} style={[caption, { color: p.accent, marginBottom: 14 }]}>
           ‹ Zurück
         </Text>
 
         <View style={styles.dateRow}>
           <View style={[styles.kindDot, { backgroundColor: workoutKindColor(workout.kind) }]} />
-          <Text style={[styles.date, { color: p.subtext }]}>
+          <Text style={[caption, { color: p.subtext, fontFamily: buttonType.fontFamily }]}>
             {DOW_SHORT[scheduled.dayOfWeek]}, {date.toLocaleDateString('de-DE')}
           </Text>
         </View>
-        <Text style={[styles.name, { color: p.text }]}>{workout.name}</Text>
+        <Text style={[title, { color: p.text, marginTop: 4 }]}>{workout.name}</Text>
 
         <View style={styles.summaryRow}>
-          <View style={[styles.summaryPill, { backgroundColor: p.chipBg }]}>
-            <Text style={[styles.summaryText, { color: p.text }]}>
+          <View style={[styles.summaryPill, { backgroundColor: p.surfaceRaised }]}>
+            <Text style={[caption, { color: p.text, fontFamily: buttonType.fontFamily }]}>
               {formatDistance(workout.estimatedDistanceMeters ?? 0)}
             </Text>
           </View>
-          <View style={[styles.summaryPill, { backgroundColor: p.chipBg }]}>
-            <Text style={[styles.summaryText, { color: p.text }]}>
+          <View style={[styles.summaryPill, { backgroundColor: p.surfaceRaised }]}>
+            <Text style={[caption, { color: p.text, fontFamily: buttonType.fontFamily }]}>
               ~ {formatDuration(workout.estimatedDurationSeconds ?? 0)}
             </Text>
           </View>
         </View>
 
         {scheduled.status === 'modified' && (
-          <Text style={[styles.movedNote, { color: p.subtext }]}>↔ Diese Einheit wurde verschoben.</Text>
+          <Text style={[caption, { color: p.subtext, marginTop: 12, fontStyle: 'italic' }]}>
+            ↔ Diese Einheit wurde verschoben.
+          </Text>
         )}
 
         {workout.elements.length > 0 && (
           <View style={styles.actionRow}>
-            <Pressable
+            <Button
+              title={scheduled.status === 'completed' ? '✓ Als erledigt markiert' : 'Als erledigt markieren'}
+              variant={scheduled.status === 'completed' ? 'primary' : 'secondary'}
               onPress={() => setWorkoutStatus(week, day, scheduled.status === 'completed' ? 'planned' : 'completed')}
               style={[
-                styles.doneBtn,
-                scheduled.status === 'completed'
-                  ? { backgroundColor: '#16a34a' }
-                  : { backgroundColor: p.chipBg, borderColor: p.border, borderWidth: 1 },
+                styles.actionBtn,
+                scheduled.status === 'completed' && { backgroundColor: p.success },
               ]}
-            >
-              <Text style={[styles.doneText, { color: scheduled.status === 'completed' ? '#fff' : p.text }]}>
-                {scheduled.status === 'completed' ? '✓ Als erledigt markiert' : 'Als erledigt markieren'}
-              </Text>
-            </Pressable>
-            <Pressable
+            />
+            <Button
+              title={scheduled.status === 'skipped' ? '✕ Fällt aus' : 'Fällt aus / überspringen'}
+              variant={scheduled.status === 'skipped' ? 'primary' : 'secondary'}
               onPress={onSkipToggle}
-              style={[
-                styles.doneBtn,
-                scheduled.status === 'skipped'
-                  ? { backgroundColor: '#d97706' }
-                  : { backgroundColor: p.chipBg, borderColor: p.border, borderWidth: 1 },
-              ]}
-            >
-              <Text style={[styles.doneText, { color: scheduled.status === 'skipped' ? '#fff' : p.text }]}>
-                {scheduled.status === 'skipped' ? '✕ Fällt aus' : 'Fällt aus / überspringen'}
-              </Text>
-            </Pressable>
+              style={[styles.actionBtn, scheduled.status === 'skipped' && { backgroundColor: p.warning }]}
+            />
           </View>
         )}
 
         {candidateDays.length > 0 && (
           <Pressable
             onPress={() => setMoveOpen(true)}
-            style={[styles.moveBtn, { borderColor: p.border, backgroundColor: p.chipBg }]}
+            style={({ pressed }) => [styles.moveBtn, { backgroundColor: p.surfaceRaised, opacity: pressed ? 0.7 : 1 }]}
           >
-            <Text style={[styles.moveText, { color: p.text }]}>↔ Auf einen anderen Tag dieser Woche verschieben</Text>
+            <Text style={[caption, { color: p.text, fontFamily: buttonType.fontFamily }]}>
+              ↔ Auf einen anderen Tag dieser Woche verschieben
+            </Text>
           </Pressable>
         )}
 
         {workout.elements.length === 0 ? (
-          <Text style={[styles.restText, { color: p.subtext }]}>
+          <Text style={[body, { color: p.subtext, marginTop: 16, lineHeight: 24 }]}>
             Ruhetag – Erholung ist Teil des Trainings. 🌙
           </Text>
         ) : (
-          <View style={{ gap: 12, marginTop: 10 }}>
+          <View style={{ gap: 12, marginTop: 14 }}>
             {workout.elements.map((el, idx) => {
               if (isRepeatBlock(el)) {
                 return (
-                  <View key={idx} style={[styles.repeatBlock, { borderColor: p.accent, backgroundColor: p.card }]}>
-                    <Text style={[styles.repeatLabel, { color: p.accent }]}>{el.repeats}× wiederholen</Text>
+                  <View key={idx} style={[styles.repeatBlock, { borderColor: p.accent, backgroundColor: p.surface }]}>
+                    <Text style={[caption, { color: p.accent, fontFamily: buttonType.fontFamily, paddingHorizontal: 8, marginBottom: 2 }]}>
+                      {el.repeats}× wiederholen
+                    </Text>
                     {el.steps.map((s, i) => (
                       <StepRow key={i} step={s} p={p} />
                     ))}
@@ -199,7 +194,7 @@ export default function WorkoutScreen() {
                 );
               }
               return (
-                <View key={idx} style={[styles.card, { backgroundColor: p.card, borderColor: p.border }]}>
+                <View key={idx} style={[styles.card, { backgroundColor: p.surface }]}>
                   <StepRow step={el} p={p} />
                 </View>
               );
@@ -208,53 +203,44 @@ export default function WorkoutScreen() {
         )}
 
         {workout.elements.length > 0 && (
-          <View style={{ marginTop: 20, gap: 12 }}>
-            <Pressable
-              onPress={onExport}
-              disabled={exporting}
-              style={({ pressed }) => [
-                styles.exportBtn,
-                { backgroundColor: p.accent, opacity: pressed || exporting ? 0.7 : 1 },
-              ]}
-            >
-              {exporting ? (
-                <ActivityIndicator color={p.accentText} />
-              ) : (
-                <Text style={[styles.exportText, { color: p.accentText }]}>Auf Garmin-Uhr exportieren</Text>
-              )}
-            </Pressable>
+          <View style={{ marginTop: 22, gap: 12 }}>
+            <Button title="Auf Garmin-Uhr exportieren" onPress={onExport} loading={exporting} />
 
-            <View style={[styles.instructions, { backgroundColor: p.card, borderColor: p.border }]}>
-              <Text style={[styles.instrTitle, { color: p.text }]}>{instructions.title}</Text>
+            <Card>
+              <Text style={[body, { color: p.text, fontFamily: buttonType.fontFamily, marginBottom: 8 }]}>
+                {instructions.title}
+              </Text>
               {instructions.steps.map((s, i) => (
                 <View key={i} style={styles.instrRow}>
-                  <Text style={[styles.instrNum, { color: p.accent }]}>{i + 1}.</Text>
-                  <Text style={[styles.instrText, { color: p.subtext }]}>{s}</Text>
+                  <Text style={[caption, { color: p.accent, width: 20 }]}>{i + 1}.</Text>
+                  <Text style={[caption, { flex: 1, color: p.subtext }]}>{s}</Text>
                 </View>
               ))}
-            </View>
+            </Card>
           </View>
         )}
       </ScrollView>
 
       <Modal visible={moveOpen} transparent animationType="fade" onRequestClose={() => setMoveOpen(false)}>
         <Pressable style={styles.modalBackdrop} onPress={() => setMoveOpen(false)}>
-          <Pressable style={[styles.modalCard, { backgroundColor: p.card }]} onPress={() => {}}>
-            <Text style={[styles.modalTitle, { color: p.text }]}>Tauschen mit …</Text>
+          <Pressable style={[styles.modalCard, { backgroundColor: p.surface }]} onPress={() => {}}>
+            <Text style={[heading, { color: p.text, marginBottom: 8 }]}>Tauschen mit …</Text>
             {candidateDays.map((c) => (
               <Pressable
                 key={c.date}
                 onPress={() => onMoveTo(c.dayOfWeek, DOW_SHORT[c.dayOfWeek]!, c.workout.name)}
                 style={[styles.modalRow, { borderTopColor: p.border }]}
               >
-                <Text style={[styles.modalDow, { color: p.text }]}>{DOW_SHORT[c.dayOfWeek]}</Text>
-                <Text style={[styles.modalName, { color: p.subtext }]} numberOfLines={1}>
+                <Text style={[body, { width: 32, color: p.text, fontFamily: buttonType.fontFamily }]}>
+                  {DOW_SHORT[c.dayOfWeek]}
+                </Text>
+                <Text style={[body, { flex: 1, color: p.subtext }]} numberOfLines={1}>
                   {c.workout.name}
                 </Text>
               </Pressable>
             ))}
             <Pressable onPress={() => setMoveOpen(false)} style={styles.modalCancel}>
-              <Text style={[styles.modalCancelText, { color: p.accent }]}>Abbrechen</Text>
+              <Text style={[body, { color: p.accent, fontFamily: buttonType.fontFamily }]}>Abbrechen</Text>
             </Pressable>
           </Pressable>
         </Pressable>
@@ -265,43 +251,22 @@ export default function WorkoutScreen() {
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  scroll: { padding: 20, gap: 4 },
-  back: { fontSize: 16, fontWeight: '600', marginBottom: 12 },
+  scroll: { padding: 20 },
   dateRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   kindDot: { width: 10, height: 10, borderRadius: 5 },
-  date: { fontSize: 14, fontWeight: '600' },
-  name: { fontSize: 26, fontWeight: '800', marginTop: 2 },
-  summaryRow: { flexDirection: 'row', gap: 10, marginTop: 12 },
-  movedNote: { fontSize: 13, marginTop: 12, fontStyle: 'italic' },
-  actionRow: { flexDirection: 'row', gap: 10, marginTop: 14 },
-  doneBtn: { flex: 1, borderRadius: 12, paddingVertical: 12, alignItems: 'center' },
-  doneText: { fontSize: 14, fontWeight: '700', textAlign: 'center' },
-  moveBtn: { marginTop: 10, borderWidth: 1, borderRadius: 12, paddingVertical: 12, alignItems: 'center' },
-  moveText: { fontSize: 14, fontWeight: '700' },
+  summaryRow: { flexDirection: 'row', gap: 10, marginTop: 14 },
+  actionRow: { flexDirection: 'row', gap: 10, marginTop: 16 },
+  actionBtn: { flex: 1, minHeight: 48 },
+  moveBtn: { marginTop: 12, borderRadius: 16, paddingVertical: 14, alignItems: 'center' },
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalCard: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 32, gap: 2 },
-  modalTitle: { fontSize: 17, fontWeight: '700', marginBottom: 8 },
+  modalCard: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 22, paddingBottom: 34 },
   modalRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, borderTopWidth: 1 },
-  modalDow: { width: 32, fontSize: 15, fontWeight: '700' },
-  modalName: { flex: 1, fontSize: 15 },
   modalCancel: { alignItems: 'center', paddingVertical: 14, marginTop: 4 },
-  modalCancelText: { fontSize: 15, fontWeight: '700' },
   summaryPill: { borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 },
-  summaryText: { fontSize: 14, fontWeight: '700' },
-  card: { borderRadius: 14, borderWidth: 1, padding: 4 },
-  repeatBlock: { borderRadius: 14, borderWidth: 2, padding: 8, paddingTop: 10, gap: 2 },
-  repeatLabel: { fontSize: 14, fontWeight: '800', paddingHorizontal: 8, marginBottom: 2 },
+  card: { borderRadius: 18, padding: 4 },
+  repeatBlock: { borderRadius: 18, borderWidth: 2, padding: 8, paddingTop: 10, gap: 2 },
   stepRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12 },
   dot: { width: 8, height: 8, borderRadius: 4 },
-  stepTitle: { fontSize: 15, fontWeight: '600' },
-  stepTarget: { fontSize: 14, marginTop: 2, fontVariant: ['tabular-nums'] },
-  restText: { fontSize: 16, lineHeight: 24, marginTop: 16 },
   empty: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  exportBtn: { borderRadius: 14, paddingVertical: 16, alignItems: 'center', minHeight: 54, justifyContent: 'center' },
-  exportText: { fontSize: 17, fontWeight: '700' },
-  instructions: { borderRadius: 14, borderWidth: 1, padding: 16, gap: 8 },
-  instrTitle: { fontSize: 15, fontWeight: '700', marginBottom: 2 },
-  instrRow: { flexDirection: 'row', gap: 8 },
-  instrNum: { fontSize: 14, fontWeight: '700', width: 20 },
-  instrText: { flex: 1, fontSize: 14, lineHeight: 20 },
+  instrRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
 });

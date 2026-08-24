@@ -8,13 +8,19 @@
     "icon": "./assets/images/icon.png",
     "scheme": "paceforge",
     "userInterfaceStyle": "automatic",
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/2502d7aa-cfc7-4a13-85d0-f6aa870321f4"
+    },
     "ios": {
       "icon": "./assets/expo.icon"
     },
     "android": {
       "package": "com.paceforge.app",
       "adaptiveIcon": {
-        "backgroundColor": "#e8622c",
+        "backgroundColor": "#0A0A0C",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
@@ -40,7 +46,7 @@
       [
         "expo-notifications",
         {
-          "color": "#e8622c"
+          "color": "#C97A3E"
         }
       ]
     ],

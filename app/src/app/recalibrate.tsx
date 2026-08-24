@@ -4,7 +4,11 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { gradeAdjustedDistance, paceMpsToPerKm, vdotFromRace, zonePaceMps } from '@paceforge/core';
 
-import { usePalette, type Palette } from '@/ui/colors';
+import { usePalette } from '@/ui/colors';
+import { title, display, eyebrow, body, caption } from '@/ui/typography';
+import { Card } from '@/ui/components/Card';
+import { Chip } from '@/ui/components/Chip';
+import { Button } from '@/ui/components/Button';
 import { useProfileStore } from '@/store/profile';
 
 const DISTANCES: { label: string; meters: number }[] = [
@@ -18,20 +22,6 @@ const DISTANCES: { label: string; meters: number }[] = [
 // Wie im Onboarding: der 12-Minuten-Cooper-Test ist ein „Rennen" mit fester
 // Zeit (720 s) und variabler Distanz.
 const COOPER_SECONDS = 720;
-
-function Chip({ label, selected, onPress, p }: { label: string; selected: boolean; onPress: () => void; p: Palette }) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={[
-        styles.chip,
-        { backgroundColor: selected ? p.accent : p.chipBg, borderColor: selected ? p.accent : p.border },
-      ]}
-    >
-      <Text style={[styles.chipText, { color: selected ? p.accentText : p.text }]}>{label}</Text>
-    </Pressable>
-  );
-}
 
 export default function RecalibrateScreen() {
   const p = usePalette();
@@ -84,8 +74,8 @@ export default function RecalibrateScreen() {
       onChangeText={(t) => set(t.replace(/[^0-9]/g, '').slice(0, maxLen))}
       keyboardType="number-pad"
       placeholder={ph}
-      placeholderTextColor={p.subtext}
-      style={[styles.timeInput, { color: p.text, backgroundColor: p.card, borderColor: p.border }]}
+      placeholderTextColor={p.faint}
+      style={[styles.timeInput, { color: p.text, backgroundColor: p.surfaceRaised }]}
     />
   );
 
@@ -93,90 +83,76 @@ export default function RecalibrateScreen() {
     <SafeAreaView style={[styles.fill, { backgroundColor: p.bg }]}>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <Pressable onPress={() => router.back()} hitSlop={12}>
-          <Text style={[styles.back, { color: p.accent }]}>‹ Zurück</Text>
+          <Text style={[caption, { color: p.accent }]}>‹ Zurück</Text>
         </Pressable>
-        <Text style={[styles.title, { color: p.text }]}>Fitness aktualisieren</Text>
-        <Text style={[styles.sub, { color: p.subtext }]}>
+        <Text style={[title, { color: p.text, marginTop: 6 }]}>Fitness aktualisieren</Text>
+        <Text style={[body, { color: p.subtext }]}>
           Neue Bestzeit oder Testlauf? Trag sie ein – VDOT, Pace-Zonen und dein Plan werden neu berechnet.
           {currentVdot != null ? ` Aktuell: VDOT ${currentVdot}.` : ''}
         </Text>
 
         <View style={styles.chipWrap}>
-          <Chip label="Lauf / Bestzeit" selected={mode === 'race'} onPress={() => setMode('race')} p={p} />
-          <Chip label="12-Minuten-Test" selected={mode === 'cooper'} onPress={() => setMode('cooper')} p={p} />
+          <Chip label="Lauf / Bestzeit" selected={mode === 'race'} onPress={() => setMode('race')} />
+          <Chip label="12-Minuten-Test" selected={mode === 'cooper'} onPress={() => setMode('cooper')} />
         </View>
 
         {mode === 'cooper' ? (
           <>
-            <Text style={[styles.sub, { color: p.subtext }]}>
+            <Text style={[body, { color: p.subtext }]}>
               12 Minuten so weit laufen wie möglich (gern auf einer Bahn), danach die Distanz eintragen.
             </Text>
-            <Text style={[styles.label, { color: p.subtext }]}>Distanz in 12 Minuten (Meter)</Text>
+            <Text style={[eyebrow, { color: p.subtext, marginTop: 4 }]}>Distanz in 12 Minuten (Meter)</Text>
             <TextInput
               value={cooperMeters}
               onChangeText={(t) => setCooperMeters(t.replace(/[^0-9]/g, '').slice(0, 4))}
               keyboardType="number-pad"
               placeholder="z. B. 2600"
-              placeholderTextColor={p.subtext}
-              style={[styles.timeInput, { color: p.text, backgroundColor: p.card, borderColor: p.border, width: 130 }]}
+              placeholderTextColor={p.faint}
+              style={[styles.timeInput, { color: p.text, backgroundColor: p.surfaceRaised, width: 130 }]}
             />
           </>
         ) : (
           <>
-            <Text style={[styles.label, { color: p.subtext }]}>Distanz</Text>
+            <Text style={[eyebrow, { color: p.subtext, marginTop: 4 }]}>Distanz</Text>
             <View style={styles.chipWrap}>
               {DISTANCES.map((d) => (
-                <Chip
-                  key={d.meters}
-                  label={d.label}
-                  selected={meters === d.meters}
-                  onPress={() => setMeters(d.meters)}
-                  p={p}
-                />
+                <Chip key={d.meters} label={d.label} selected={meters === d.meters} onPress={() => setMeters(d.meters)} />
               ))}
             </View>
 
-            <Text style={[styles.label, { color: p.subtext }]}>Zeit (Std : Min : Sek)</Text>
+            <Text style={[eyebrow, { color: p.subtext, marginTop: 4 }]}>Zeit (Std : Min : Sek)</Text>
             <View style={styles.timeRow}>
               {numField(h, setH, 'h', 2)}
-              <Text style={[styles.colon, { color: p.text }]}>:</Text>
+              <Text style={[title, { color: p.text }]}>:</Text>
               {numField(m, setM, 'mm', 2)}
-              <Text style={[styles.colon, { color: p.text }]}>:</Text>
+              <Text style={[title, { color: p.text }]}>:</Text>
               {numField(sec, setSec, 'ss', 2)}
             </View>
           </>
         )}
 
-        <Text style={[styles.label, { color: p.subtext }]}>Höhenmeter (optional)</Text>
+        <Text style={[eyebrow, { color: p.subtext, marginTop: 4 }]}>Höhenmeter (optional)</Text>
         <TextInput
           value={ascent}
           onChangeText={(t) => setAscent(t.replace(/[^0-9]/g, '').slice(0, 4))}
           keyboardType="number-pad"
           placeholder="z. B. 40"
-          placeholderTextColor={p.subtext}
-          style={[styles.timeInput, { color: p.text, backgroundColor: p.card, borderColor: p.border, width: 110 }]}
+          placeholderTextColor={p.faint}
+          style={[styles.timeInput, { color: p.text, backgroundColor: p.surfaceRaised, width: 110 }]}
         />
 
         {newVdot != null && (
-          <View style={[styles.preview, { backgroundColor: p.card, borderColor: p.border }]}>
-            <Text style={[styles.previewLabel, { color: p.subtext }]}>Neue VDOT</Text>
-            <Text style={[styles.previewVdot, { color: p.accent }]}>{newVdot}</Text>
-            <Text style={[styles.previewPace, { color: p.text }]}>
+          <Card style={{ alignItems: 'flex-start' }}>
+            <Text style={[eyebrow, { color: p.subtext }]}>Neue VDOT</Text>
+            <Text style={[display, { color: p.accent, fontSize: 40, lineHeight: 44 }]}>{newVdot}</Text>
+            <Text style={[caption, { color: p.text, marginTop: 4 }]}>
               Schwellen-Pace ~ {paceMpsToPerKm(zonePaceMps(newVdot, 'threshold').highMps)} /km
               {currentVdot != null ? `  ·  vorher VDOT ${currentVdot}` : ''}
             </Text>
-          </View>
+          </Card>
         )}
 
-        <Pressable
-          onPress={apply}
-          disabled={!entry}
-          style={[styles.applyBtn, { backgroundColor: entry ? p.accent : p.border }]}
-        >
-          <Text style={[styles.applyText, { color: entry ? p.accentText : p.subtext }]}>
-            Übernehmen & Plan neu berechnen
-          </Text>
-        </Pressable>
+        <Button title="Übernehmen & Plan neu berechnen" onPress={apply} disabled={!entry} style={{ marginTop: 4 }} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -185,17 +161,10 @@ export default function RecalibrateScreen() {
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   scroll: { padding: 24, gap: 14 },
-  back: { fontSize: 16, fontWeight: '600' },
-  title: { fontSize: 24, fontWeight: '800', marginTop: 6 },
-  sub: { fontSize: 14, lineHeight: 20 },
-  label: { fontSize: 13, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.4, marginTop: 8 },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  chip: { borderRadius: 12, borderWidth: 1, paddingVertical: 12, paddingHorizontal: 16 },
-  chipText: { fontSize: 15, fontWeight: '600' },
   timeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   timeInput: {
-    borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: 14,
     paddingVertical: 14,
     paddingHorizontal: 12,
     fontSize: 20,
@@ -203,11 +172,4 @@ const styles = StyleSheet.create({
     width: 72,
     textAlign: 'center',
   },
-  colon: { fontSize: 22, fontWeight: '800' },
-  preview: { marginTop: 8, borderRadius: 14, borderWidth: 1, padding: 16, alignItems: 'flex-start' },
-  previewLabel: { fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.4 },
-  previewVdot: { fontSize: 34, fontWeight: '800' },
-  previewPace: { fontSize: 14, marginTop: 2 },
-  applyBtn: { marginTop: 12, borderRadius: 14, paddingVertical: 16, alignItems: 'center' },
-  applyText: { fontSize: 17, fontWeight: '700' },
 });
