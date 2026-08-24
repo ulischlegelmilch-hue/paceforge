@@ -68,6 +68,7 @@ export default function RootLayout() {
         <Stack.Screen name="more" />
         <Stack.Screen name="glossary" />
         <Stack.Screen name="add-event" />
+        <Stack.Screen name="max" />
       </Stack>
     </>
   );

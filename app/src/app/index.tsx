@@ -27,6 +27,7 @@ import { Button } from '@/ui/components/Button';
 import { Eyebrow } from '@/ui/components/Eyebrow';
 import { DOW_SHORT, formatDistance, formatRaceTime, phaseColor, phaseLabel, workoutKindColor } from '@/ui/format';
 import { useProfileStore } from '@/store/profile';
+import { hasBackend } from '@/config';
 
 const DISTANCE_LABEL: Record<RaceDistance, string> = {
   '5k': '5 km',
@@ -343,6 +344,13 @@ export default function HomeScreen() {
           variant="secondary"
           onPress={() => router.push('/activities')}
         />
+        {hasBackend && (
+          <Button
+            title="Max' Training ansehen"
+            variant="secondary"
+            onPress={() => router.push('/max')}
+          />
+        )}
 
         <Text style={[heading, { color: p.text, marginTop: 4 }]}>Mehr trainieren</Text>
         <View style={styles.tileGrid}>

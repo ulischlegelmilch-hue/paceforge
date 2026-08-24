@@ -26,6 +26,7 @@ import {
   type TrainingPlan,
   type WeeklyAnalysis,
   type WeekLighteningAssessment,
+  type Workout,
 } from '@paceforge/core';
 
 import { createPersistStorage } from './storage';
@@ -71,6 +72,11 @@ interface ProfileState {
   /** ISO-Zeitpunkt des zuletzt von Garmin übernommenen Laufs (Cursor für den nächsten Abruf). */
   garminLastPullAt: string | null;
   setGarminLastPullAt: (at: string | null) => void;
+  /** Einmalig mit Max' PaceForge-Kids-App ausgetauschter Kopplungs-Code (siehe /max). */
+  kidsChildCode: string | null;
+  setKidsChildCode: (code: string | null) => void;
+  /** Überschreibt die geplante Einheit an einem konkreten Datum (z. B. "Max' Training übernehmen"). */
+  overrideWorkoutForDate: (date: string, workout: Workout) => void;
   createProfile: (input: CreateProfileInput) => AthleteProfile;
   addActivity: (activity: CompletedActivity) => void;
   /** Wie addActivity, aber für mehrere auf einmal - überspringt bereits vorhandene IDs (z. B. Doppel-Abruf von Garmin). */
@@ -149,6 +155,21 @@ export const useProfileStore = create<ProfileState>()(
   setLastSyncedAt: (at) => set({ lastSyncedAt: at }),
   garminLastPullAt: null,
   setGarminLastPullAt: (at) => set({ garminLastPullAt: at }),
+  kidsChildCode: null,
+  setKidsChildCode: (code) => set({ kidsChildCode: code }),
+  overrideWorkoutForDate: (date, workout) =>
+    set((s) => {
+      if (!s.plan) return s;
+      const weeks = s.plan.weeks.map((w) => {
+        const workouts = w.workouts.map((sw) => (sw.date === date ? { ...sw, workout, status: 'modified' as const } : sw));
+        return {
+          ...w,
+          workouts,
+          targetWeeklyDistanceMeters: workouts.reduce((sum, sw) => sum + (sw.workout.estimatedDistanceMeters ?? 0), 0),
+        };
+      });
+      return { plan: { ...s.plan, weeks } };
+    }),
   createProfile: ({ goal, fitness, daysPerWeek, longRunDay, weekStartDay, availableDays, strength, startDate }) => {
     const profile: AthleteProfile = {
       id: `athlete-${Date.now()}`,
@@ -361,6 +382,7 @@ export const useProfileStore = create<ProfileState>()(
         deviceId: s.deviceId,
         lastSyncedAt: s.lastSyncedAt,
         garminLastPullAt: s.garminLastPullAt,
+        kidsChildCode: s.kidsChildCode,
       }),
     },
   ),
