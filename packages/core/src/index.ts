@@ -5,6 +5,7 @@ export * from './domain/athlete';
 export * from './domain/workout';
 export * from './domain/plan';
 export * from './domain/activity';
+export * from './domain/event';
 
 // Delivery-Abstraktion
 export * from './delivery/WorkoutDeliveryProvider';
@@ -22,9 +23,15 @@ export * from './planner/generatePlan';
 export * from './planner/mergePlan';
 export * from './planner/maintenance';
 export * from './planner/schedule';
+export * from './planner/windowAdjust';
+export * from './planner/events';
 
 // Aktivitäts-Auswertung & Adaption (framework-agnostisch, kein FIT-SDK)
 export * from './adaptation/adapt';
+export * from './adaptation/classifyFreeRun';
+export * from './adaptation/weeklyAnalysis';
+export * from './adaptation/returnToRunning';
+export * from './adaptation/weekLightening';
 
 // Natürlichsprachliche Zieleingabe (regelbasiert)
 export * from './nlp/parseGoal';
@@ -37,6 +44,7 @@ export * from './nutrition/index';
 export * from './advice/index';
 export * from './advice/detraining';
 export * from './advice/terrain';
+export * from './advice/coachComment';
 
 // Kalender-Export (.ics)
 export * from './calendar/ics';

@@ -1,9 +1,11 @@
 import { useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import {
   allZones,
   assessDetraining,
+  classifyFreeRun,
   kindLabel,
   locateByDate,
   paceMpsToPerKm,
@@ -11,6 +13,7 @@ import {
   strengthOnDay,
   strengthScheduleForWeek,
   weekOf,
+  weeklyAnalysis,
   ymdOf,
   type RaceDistance,
   type StandardRace,
@@ -18,6 +21,10 @@ import {
 } from '@paceforge/core';
 
 import { usePalette } from '@/ui/colors';
+import { display, eyebrow, heading, title, body, bodyStrong, caption, button as buttonType } from '@/ui/typography';
+import { Card } from '@/ui/components/Card';
+import { Button } from '@/ui/components/Button';
+import { Eyebrow } from '@/ui/components/Eyebrow';
 import { DOW_SHORT, formatDistance, formatRaceTime, phaseColor, phaseLabel, workoutKindColor } from '@/ui/format';
 import { useProfileStore } from '@/store/profile';
 
@@ -40,6 +47,12 @@ const ZONE_LABEL: Record<ZoneKey, string> = {
 const ZONE_ORDER: ZoneKey[] = ['easy', 'marathon', 'threshold', 'interval', 'repetition'];
 const RACE_ORDER: StandardRace[] = ['5k', '10k', 'half', 'marathon'];
 
+const TILES = [
+  { route: '/strength' as const, icon: 'barbell-outline' as const, label: 'Krafttraining' },
+  { route: '/nutrition' as const, icon: 'restaurant-outline' as const, label: 'Ernährung' },
+  { route: '/training' as const, icon: 'calendar-outline' as const, label: 'Trainingsumfang' },
+];
+
 export default function HomeScreen() {
   const p = usePalette();
   const router = useRouter();
@@ -51,23 +64,13 @@ export default function HomeScreen() {
     return (
       <SafeAreaView style={[styles.fill, { backgroundColor: p.bg }]}>
         <View style={styles.centerWrap}>
-          <Text style={[styles.brand, { color: p.accent }]}>PaceForge</Text>
-          <Text style={[styles.lead, { color: p.text }]}>
-            Dein persönlicher Lauf-Trainingsplan
+          <Text style={[title, { color: p.accent }]}>PaceForge</Text>
+          <Text style={[title, { color: p.text, marginTop: 10 }]}>Dein persönlicher Lauf-Trainingsplan</Text>
+          <Text style={[body, { color: p.subtext, marginTop: 6 }]}>
+            Beantworte ein paar Fragen zu deinem Ziel und deiner Form – wir berechnen deine Trainings-Paces und
+            bauen darauf deinen Plan.
           </Text>
-          <Text style={[styles.leadSub, { color: p.subtext }]}>
-            Beantworte ein paar Fragen zu deinem Ziel und deiner Form – wir berechnen
-            deine Trainings-Paces und bauen darauf deinen Plan.
-          </Text>
-          <Pressable
-            onPress={() => router.push('/onboarding')}
-            style={({ pressed }) => [
-              styles.cta,
-              { backgroundColor: p.accent, opacity: pressed ? 0.85 : 1 },
-            ]}
-          >
-            <Text style={[styles.ctaText, { color: p.accentText }]}>Plan erstellen</Text>
-          </Pressable>
+          <Button title="Plan erstellen" onPress={() => router.push('/onboarding')} style={{ marginTop: 28 }} />
         </View>
       </SafeAreaView>
     );
@@ -86,19 +89,45 @@ export default function HomeScreen() {
     ? new Set(strengthScheduleForWeek(thisWeek, eq, spw).map((s) => s.dayOfWeek))
     : new Set<number>();
   const detraining = assessDetraining(activities);
-  const detrainingColor = detraining?.level === 'warn' ? '#d97706' : p.accent;
+  const detrainingColor = detraining?.level === 'warn' ? p.danger : p.warning;
 
   const weekTraining = thisWeek?.workouts.filter((w) => w.workout.kind !== 'rest') ?? [];
   const weekDone = weekTraining.filter((w) => w.status === 'completed').length;
-  const weekProgress = weekTraining.length > 0 ? weekDone / weekTraining.length : 0;
+  // Eigene Läufe (z. B. an Ruhetagen) zählen als echtes, absolviertes Training
+  // mit - der Fortschrittsbalken darf dadurch über 100 % geplant hinausgehen,
+  // gedeckelt auf 100 % Anzeige, mit eigenem Hinweis auf die Zusatzläufe.
+  const weekAnalysis = plan ? weeklyAnalysis(plan, activities) : null;
+  const extraRuns = weekAnalysis?.extraActivities ?? [];
+  const weekDoneWithExtras = weekDone + extraRuns.length;
+  const weekProgress = weekTraining.length > 0 ? Math.min(1, weekDoneWithExtras / weekTraining.length) : 0;
+  // Geplante + eigene Läufe dieser Woche chronologisch gemischt, damit ein
+  // spontaner Lauf am Ruhetag genauso sichtbar ist wie eine geplante Einheit.
+  type WeekRow =
+    | { kind: 'planned'; date: string; dayOfWeek: number; sw: (typeof weekTraining)[number] }
+    | { kind: 'free'; date: string; dayOfWeek: number; activity: (typeof extraRuns)[number] };
+  const weekRows: WeekRow[] = [
+    ...thisWeek?.workouts
+      .filter((w) => w.workout.kind !== 'rest')
+      .map((sw): WeekRow => ({ kind: 'planned', date: sw.date, dayOfWeek: sw.dayOfWeek, sw })) ?? [],
+    ...extraRuns.map((a): WeekRow => ({
+      kind: 'free',
+      date: a.startTime.slice(0, 10),
+      dayOfWeek: new Date(`${a.startTime.slice(0, 10)}T12:00:00`).getDay(),
+      activity: a,
+    })),
+  ].sort((a, b) => a.date.localeCompare(b.date));
 
   return (
     <SafeAreaView style={[styles.fill, { backgroundColor: p.bg }]}>
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.header}>
-          <Text style={[styles.brand, { color: p.accent }]}>PaceForge</Text>
-          <Pressable onPress={() => router.push('/more')} hitSlop={10} style={[styles.gearBtn, { backgroundColor: p.chipBg }]}>
-            <Text style={{ fontSize: 16 }}>⚙️</Text>
+          <Text style={[heading, { color: p.text, letterSpacing: -0.2 }]}>PaceForge</Text>
+          <Pressable
+            onPress={() => router.push('/more')}
+            hitSlop={10}
+            style={[styles.gearBtn, { backgroundColor: p.surfaceRaised }]}
+          >
+            <Ionicons name="settings-outline" size={19} color={p.text} />
           </Pressable>
         </View>
 
@@ -109,16 +138,14 @@ export default function HomeScreen() {
               const isRest = sw.workout.kind === 'rest';
               return (
                 <View key={sw.date} style={styles.weekStripDay}>
-                  <Text style={[styles.weekStripDow, { color: isToday ? p.accent : p.subtext }]}>
-                    {DOW_SHORT[sw.dayOfWeek]}
-                  </Text>
+                  <Text style={[caption, { color: isToday ? p.accent : p.faint }]}>{DOW_SHORT[sw.dayOfWeek]}</Text>
                   <View
                     style={[
                       styles.weekStripDot,
                       isRest
-                        ? { backgroundColor: 'transparent', borderWidth: 1, borderColor: p.border }
+                        ? { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: p.border }
                         : { backgroundColor: workoutKindColor(sw.workout.kind) },
-                      isToday && { borderWidth: 2, borderColor: p.text },
+                      isToday && { borderWidth: 2, borderColor: p.accent },
                     ]}
                   />
                 </View>
@@ -127,41 +154,37 @@ export default function HomeScreen() {
           </View>
         )}
 
-        <View style={[styles.card, { backgroundColor: p.card, borderColor: p.border }]}>
-          <Text style={[styles.cardLabel, { color: p.subtext }]}>Dein Ziel</Text>
-          <Text style={[styles.goalText, { color: p.text }]}>
+        <Card style={styles.heroCard}>
+          <Eyebrow>Dein Ziel</Eyebrow>
+          <Text style={[heading, { color: p.text, marginTop: 2 }]}>
             {profile.goal.mode === 'maintain'
               ? 'Form halten'
               : `${DISTANCE_LABEL[profile.goal.distance]}${profile.goal.weeks ? ` · ${profile.goal.weeks} Wochen` : ''}`}
           </Text>
-          <Text style={[styles.cardLabel, { color: p.subtext, marginTop: 14 }]}>
-            Aktuelle Fitness (VDOT)
-          </Text>
-          <Text style={[styles.vdot, { color: p.text }]}>{profile.currentVdot}</Text>
-          <Text style={[styles.cardLabel, { color: p.subtext }]}>
-            {profile.daysPerWeek} Trainingstage / Woche
-          </Text>
-          <Pressable onPress={() => router.push('/recalibrate')} hitSlop={8}>
-            <Text style={[styles.updateLink, { color: p.accent }]}>Neue Bestzeit? Fitness aktualisieren ›</Text>
-          </Pressable>
-          <Pressable onPress={() => router.push('/training')} hitSlop={8}>
-            <Text style={[styles.updateLink, { color: p.accent }]}>Trainingsumfang & Tipps ›</Text>
-          </Pressable>
-        </View>
-
-        {/* Detraining-Hinweis (nur mit Lauf-Historie) */}
-        {detraining && (
-          <View style={[styles.card, { backgroundColor: p.card, borderColor: detrainingColor }]}>
-            <Text style={[styles.cardLabel, { color: detrainingColor }]}>
-              {detraining.level === 'warn' ? 'Form in Gefahr' : 'Trainingsreiz niedrig'}
-            </Text>
-            <Text style={[styles.todaySub, { color: p.text, marginTop: 4 }]}>{detraining.text}</Text>
+          <Eyebrow style={{ marginTop: 18 }}>Aktuelle Fitness (VDOT)</Eyebrow>
+          <Text style={[display, { color: p.accent }]}>{profile.currentVdot}</Text>
+          <Text style={[caption, { color: p.subtext }]}>{profile.daysPerWeek} Trainingstage / Woche</Text>
+          <View style={styles.heroLinks}>
+            <Pressable onPress={() => router.push('/recalibrate')} hitSlop={8}>
+              <Text style={[caption, { color: p.text }]}>Neue Bestzeit? Fitness aktualisieren ›</Text>
+            </Pressable>
+            <Pressable onPress={() => router.push('/training')} hitSlop={8}>
+              <Text style={[caption, { color: p.text }]}>Trainingsumfang & Tipps ›</Text>
+            </Pressable>
           </View>
+        </Card>
+
+        {detraining && (
+          <Card outlined outlineColor={detrainingColor}>
+            <Eyebrow style={{ color: detrainingColor }}>
+              {detraining.level === 'warn' ? 'Form in Gefahr' : 'Trainingsreiz niedrig'}
+            </Eyebrow>
+            <Text style={[body, { color: p.text, marginTop: 4 }]}>{detraining.text}</Text>
+          </Card>
         )}
 
-        {/* Heute */}
-        <View style={[styles.card, { backgroundColor: p.card, borderColor: p.border }]}>
-          <Text style={[styles.cardLabel, { color: p.subtext }]}>Heute</Text>
+        <Card>
+          <Eyebrow>Heute</Eyebrow>
           {todayLoc && todayLoc.scheduled.workout.kind !== 'rest' ? (
             <Pressable
               onPress={() =>
@@ -170,59 +193,83 @@ export default function HomeScreen() {
                   params: { week: todayLoc.weekIndex, day: todayLoc.scheduled.dayOfWeek },
                 })
               }
-              style={({ pressed }) => [{ opacity: pressed ? 0.6 : 1 }]}
+              style={({ pressed }) => [{ opacity: pressed ? 0.6 : 1, marginTop: 4 }]}
             >
               <Text
                 style={[
-                  styles.goalText,
+                  heading,
                   { color: p.text },
-                  todayLoc.scheduled.status === 'skipped' && styles.woNameDone,
+                  todayLoc.scheduled.status === 'skipped' && styles.strike,
                 ]}
               >
                 {todayLoc.scheduled.workout.name}
               </Text>
-              <Text style={[styles.todaySub, { color: todayLoc.scheduled.status === 'skipped' ? p.subtext : p.accent }]}>
+              <Text style={[caption, { color: todayLoc.scheduled.status === 'skipped' ? p.subtext : p.accent, marginTop: 4 }]}>
                 {todayLoc.scheduled.status === 'skipped'
                   ? '✕ Übersprungen · zum Ändern tippen ›'
                   : `${formatDistance(todayLoc.scheduled.workout.estimatedDistanceMeters ?? 0)} · zum Öffnen tippen ›`}
               </Text>
             </Pressable>
           ) : (
-            <Text style={[styles.todayRest, { color: p.subtext }]}>
+            <Text style={[body, { color: p.subtext, marginTop: 4 }]}>
               {todayLoc ? 'Ruhetag – Erholung zählt auch. 🌙' : 'Heute kein geplantes Training.'}
             </Text>
           )}
           {todayStrength && (
             <Pressable onPress={() => router.push('/strength')} hitSlop={6}>
-              <Text style={[styles.todayStrength, { color: p.accent }]}>
+              <Text style={[caption, { color: p.accent, fontFamily: buttonType.fontFamily, marginTop: 10 }]}>
                 + Kraft: {kindLabel(todayStrength.kind)} ›
               </Text>
             </Pressable>
           )}
-        </View>
+        </Card>
 
-        {/* Diese Woche */}
         {thisWeek && (
-          <View style={[styles.card, { backgroundColor: p.card, borderColor: p.border }]}>
+          <Card>
             <View style={styles.weekHead}>
-              <Text style={[styles.cardLabel, { color: p.subtext }]}>
-                Diese Woche · Woche {thisWeek.index + 1}
-              </Text>
+              <Eyebrow>Diese Woche · Woche {thisWeek.index + 1}</Eyebrow>
               <View style={[styles.badge, { backgroundColor: phaseColor(thisWeek.phase) }]}>
-                <Text style={styles.badgeText}>{phaseLabel(thisWeek.phase)}</Text>
+                <Text style={[caption, { color: '#fff', fontFamily: buttonType.fontFamily, fontSize: 11 }]}>
+                  {phaseLabel(thisWeek.phase)}
+                </Text>
               </View>
             </View>
             {weekTraining.length > 0 && (
               <View style={styles.weekProgressRow}>
-                <View style={[styles.weekProgressTrack, { backgroundColor: p.chipBg }]}>
-                  <View style={[styles.weekProgressFill, { width: `${weekProgress * 100}%`, backgroundColor: '#16a34a' }]} />
+                <View style={[styles.weekProgressTrack, { backgroundColor: p.surfaceRaised }]}>
+                  <View style={[styles.weekProgressFill, { width: `${weekProgress * 100}%`, backgroundColor: p.success }]} />
                 </View>
-                <Text style={[styles.weekProgressText, { color: p.subtext }]}>
-                  {weekDone}/{weekTraining.length} erledigt
+                <Text style={[caption, { color: p.subtext }]}>
+                  {weekDoneWithExtras}/{weekTraining.length} erledigt
+                  {extraRuns.length > 0 ? ` (+${extraRuns.length} eigene)` : ''}
                 </Text>
               </View>
             )}
-            {weekTraining.map((sw) => {
+            {weekRows.map((row, i) => {
+              const rowStyle = [
+                styles.dayRow,
+                i > 0 && { borderTopWidth: 1, borderTopColor: p.border },
+              ];
+              if (row.kind === 'free') {
+                const zone = profile ? classifyFreeRun(row.activity, profile.currentVdot) : null;
+                return (
+                  <Pressable
+                    key={row.activity.id}
+                    onPress={() => router.push({ pathname: '/activity-detail', params: { id: row.activity.id } })}
+                    style={({ pressed }) => [...rowStyle, { opacity: pressed ? 0.6 : 1 }]}
+                  >
+                    <Text style={[caption, { width: 24, color: row.date === today ? p.accent : p.subtext, fontFamily: buttonType.fontFamily }]}>
+                      {DOW_SHORT[row.dayOfWeek]}
+                    </Text>
+                    <View style={[styles.kindDot, { backgroundColor: p.accent }]} />
+                    <Text style={[bodyStrong, { flex: 1, color: p.text }]} numberOfLines={1}>
+                      Eigener Lauf{zone ? ` · ${zone.zoneLabel}` : ''}
+                    </Text>
+                    <Text style={{ fontSize: 16, color: p.success }}>✓</Text>
+                  </Pressable>
+                );
+              }
+              const { sw } = row;
               const isToday = sw.date === today;
               const done = sw.status === 'completed';
               const skipped = sw.status === 'skipped';
@@ -236,114 +283,83 @@ export default function HomeScreen() {
                       params: { week: thisWeek.index, day: sw.dayOfWeek },
                     })
                   }
-                  style={({ pressed }) => [styles.dayRow, { borderTopColor: p.border, opacity: pressed ? 0.6 : 1 }]}
+                  style={({ pressed }) => [...rowStyle, { opacity: pressed ? 0.6 : 1 }]}
                 >
-                  <Text style={[styles.dow, { color: isToday ? p.accent : p.subtext }]}>
+                  <Text style={[caption, { width: 24, color: isToday ? p.accent : p.subtext, fontFamily: buttonType.fontFamily }]}>
                     {DOW_SHORT[sw.dayOfWeek]}
                   </Text>
                   <View style={[styles.kindDot, { backgroundColor: workoutKindColor(sw.workout.kind) }]} />
-                  {moved && <Text style={[styles.movedTag, { color: p.accent }]}>↔</Text>}
-                  <Text
-                    style={[styles.woName, { color: p.text }, (done || skipped) && styles.woNameDone]}
-                    numberOfLines={1}
-                  >
+                  {sw.workout.kind === 'race' ? (
+                    <Text style={{ fontSize: 14 }}>🏁</Text>
+                  ) : (
+                    moved && <Text style={[caption, { color: p.accent, fontFamily: buttonType.fontFamily }]}>↔</Text>
+                  )}
+                  <Text style={[bodyStrong, { flex: 1, color: p.text }, (done || skipped) && styles.strike]} numberOfLines={1}>
                     {sw.workout.name}
                   </Text>
                   {weekStrengthDays.has(sw.dayOfWeek) && (
-                    <Text style={[styles.kraftTag, { color: p.accent, borderColor: p.accent }]}>Kraft</Text>
+                    <Text style={[styles.kraftTag, caption, { color: p.accent, borderColor: p.accent }]}>Kraft</Text>
                   )}
                   {done ? (
-                    <Text style={[styles.doneCheck, { color: '#16a34a' }]}>✓</Text>
+                    <Text style={{ fontSize: 16, color: p.success }}>✓</Text>
                   ) : skipped ? (
-                    <Text style={[styles.doneCheck, { color: '#d97706' }]}>✕</Text>
+                    <Text style={{ fontSize: 16, color: p.warning }}>✕</Text>
                   ) : (
-                    <Text style={[styles.woDist, { color: p.subtext }]}>
+                    <Text style={[caption, { color: p.subtext }]}>
                       {formatDistance(sw.workout.estimatedDistanceMeters ?? 0)}
                     </Text>
                   )}
                 </Pressable>
               );
             })}
-          </View>
+          </Card>
         )}
 
-        <Text style={[styles.sectionTitle, { color: p.text }]}>Deine Trainings-Paces</Text>
-        <View style={[styles.card, { backgroundColor: p.card, borderColor: p.border }]}>
+        <Text style={[heading, { color: p.text, marginTop: 4 }]}>Deine Trainings-Paces</Text>
+        <Card>
           {ZONE_ORDER.map((z, i) => (
-            <View
-              key={z}
-              style={[
-                styles.zoneRow,
-                i < ZONE_ORDER.length - 1 && { borderBottomWidth: 1, borderBottomColor: p.border },
-              ]}
-            >
-              <Text style={[styles.zoneLabel, { color: p.text }]}>{ZONE_LABEL[z]}</Text>
-              <Text style={[styles.zonePace, { color: p.subtext }]}>
+            <View key={z} style={[styles.zoneRow, i > 0 && { borderTopWidth: 1, borderTopColor: p.border }]}>
+              <Text style={[bodyStrong, { color: p.text }]}>{ZONE_LABEL[z]}</Text>
+              <Text style={[body, { color: p.subtext }]}>
                 {paceMpsToPerKm(zones[z].lowMps)}–{paceMpsToPerKm(zones[z].highMps)} /km
               </Text>
             </View>
           ))}
-        </View>
+        </Card>
 
-        <Text style={[styles.sectionTitle, { color: p.text }]}>Geschätzte Wettkampfzeiten</Text>
-        <View style={[styles.card, { backgroundColor: p.card, borderColor: p.border }]}>
+        <Text style={[heading, { color: p.text, marginTop: 4 }]}>Geschätzte Wettkampfzeiten</Text>
+        <Card>
           {RACE_ORDER.map((r, i) => (
-            <View
-              key={r}
-              style={[
-                styles.zoneRow,
-                i < RACE_ORDER.length - 1 && { borderBottomWidth: 1, borderBottomColor: p.border },
-              ]}
-            >
-              <Text style={[styles.zoneLabel, { color: p.text }]}>{DISTANCE_LABEL[r]}</Text>
-              <Text style={[styles.zonePace, { color: p.subtext }]}>{formatRaceTime(races[r])}</Text>
+            <View key={r} style={[styles.zoneRow, i > 0 && { borderTopWidth: 1, borderTopColor: p.border }]}>
+              <Text style={[bodyStrong, { color: p.text }]}>{DISTANCE_LABEL[r]}</Text>
+              <Text style={[body, { color: p.subtext }]}>{formatRaceTime(races[r])}</Text>
             </View>
           ))}
-        </View>
+        </Card>
 
-        <Pressable
-          onPress={() => router.push('/plan')}
-          style={({ pressed }) => [
-            styles.planCta,
-            { backgroundColor: p.accent, opacity: pressed ? 0.85 : 1 },
-          ]}
-        >
-          <Text style={[styles.ctaText, { color: p.accentText }]}>Trainingsplan ansehen</Text>
-        </Pressable>
-
-        <Pressable
+        <Button title="Trainingsplan ansehen" onPress={() => router.push('/plan')} style={{ marginTop: 4 }} />
+        <Button
+          title="Fortschritt & Läufe importieren"
+          variant="secondary"
           onPress={() => router.push('/activities')}
-          style={({ pressed }) => [
-            styles.secondaryCta,
-            { borderColor: p.accent, opacity: pressed ? 0.7 : 1 },
-          ]}
-        >
-          <Text style={[styles.ctaText, { color: p.accent }]}>Fortschritt & Läufe importieren</Text>
-        </Pressable>
+        />
 
-        <Text style={[styles.sectionTitle, { color: p.text }]}>Mehr trainieren</Text>
+        <Text style={[heading, { color: p.text, marginTop: 4 }]}>Mehr trainieren</Text>
         <View style={styles.tileGrid}>
-          <Pressable
-            onPress={() => router.push('/strength')}
-            style={({ pressed }) => [styles.tile, { backgroundColor: p.card, borderColor: p.border, opacity: pressed ? 0.7 : 1 }]}
-          >
-            <Text style={styles.tileEmoji}>💪</Text>
-            <Text style={[styles.tileText, { color: p.text }]}>Krafttraining</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => router.push('/nutrition')}
-            style={({ pressed }) => [styles.tile, { backgroundColor: p.card, borderColor: p.border, opacity: pressed ? 0.7 : 1 }]}
-          >
-            <Text style={styles.tileEmoji}>🍽️</Text>
-            <Text style={[styles.tileText, { color: p.text }]}>Ernährung</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => router.push('/training')}
-            style={({ pressed }) => [styles.tile, { backgroundColor: p.card, borderColor: p.border, opacity: pressed ? 0.7 : 1 }]}
-          >
-            <Text style={styles.tileEmoji}>📅</Text>
-            <Text style={[styles.tileText, { color: p.text }]}>Trainingsumfang</Text>
-          </Pressable>
+          {TILES.map((t) => (
+            <Pressable
+              key={t.route}
+              onPress={() => router.push(t.route)}
+              style={({ pressed }) => [styles.tile, { backgroundColor: p.surface, opacity: pressed ? 0.7 : 1 }]}
+            >
+              <View style={[styles.tileIconWrap, { backgroundColor: p.accentSoft }]}>
+                <Ionicons name={t.icon} size={22} color={p.accent} />
+              </View>
+              <Text style={[caption, { color: p.text, fontFamily: buttonType.fontFamily, textAlign: 'center' }]}>
+                {t.label}
+              </Text>
+            </Pressable>
+          ))}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -352,56 +368,26 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  centerWrap: { flex: 1, justifyContent: 'center', paddingHorizontal: 28, gap: 12 },
+  centerWrap: { flex: 1, justifyContent: 'center', paddingHorizontal: 28 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  brand: { fontSize: 20, fontWeight: '800', letterSpacing: 0.5 },
-  gearBtn: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
-  lead: { fontSize: 26, fontWeight: '700', marginTop: 8 },
-  leadSub: { fontSize: 15, lineHeight: 22, marginTop: 4 },
-  cta: { marginTop: 24, borderRadius: 14, paddingVertical: 16, alignItems: 'center' },
-  planCta: { marginTop: 4, borderRadius: 14, paddingVertical: 16, alignItems: 'center' },
-  secondaryCta: { marginTop: 4, borderRadius: 14, borderWidth: 1.5, paddingVertical: 16, alignItems: 'center' },
-  ctaText: { fontSize: 17, fontWeight: '700' },
-  scroll: { padding: 20, gap: 16 },
-  card: { borderRadius: 16, borderWidth: 1, padding: 18 },
-  cardLabel: { fontSize: 13, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.4 },
-  goalText: { fontSize: 20, fontWeight: '700', marginTop: 4 },
-  vdot: { fontSize: 44, fontWeight: '800', marginVertical: 2 },
-  updateLink: { fontSize: 14, fontWeight: '600', marginTop: 12 },
-  sectionTitle: { fontSize: 18, fontWeight: '700', marginTop: 4 },
-  todaySub: { fontSize: 14, fontWeight: '600', marginTop: 4 },
-  todayStrength: { fontSize: 14, fontWeight: '700', marginTop: 8 },
-  todayRest: { fontSize: 16, marginTop: 4 },
-  kraftTag: { fontSize: 11, fontWeight: '700', borderWidth: 1, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 1, overflow: 'hidden' },
-  movedTag: { fontSize: 13, fontWeight: '800' },
-  weekStrip: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 4 },
-  weekStripDay: { alignItems: 'center', gap: 6 },
-  weekStripDow: { fontSize: 12, fontWeight: '600' },
-  weekStripDot: { width: 10, height: 10, borderRadius: 5 },
+  gearBtn: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
+  scroll: { padding: 20, gap: 14 },
+  heroCard: { paddingBottom: 22 },
+  heroLinks: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginTop: 16 },
+  strike: { textDecorationLine: 'line-through', opacity: 0.5 },
+  weekStrip: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 6, marginBottom: 2 },
+  weekStripDay: { alignItems: 'center', gap: 8 },
+  weekStripDot: { width: 12, height: 12, borderRadius: 6 },
   weekHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 },
   badge: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
-  badgeText: { color: '#fff', fontSize: 12, fontWeight: '700' },
-  weekProgressRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10, marginBottom: 2 },
+  weekProgressRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12, marginBottom: 4 },
   weekProgressTrack: { flex: 1, height: 6, borderRadius: 3, overflow: 'hidden' },
   weekProgressFill: { height: 6, borderRadius: 3 },
-  weekProgressText: { fontSize: 12, fontWeight: '600', fontVariant: ['tabular-nums'] },
-  dayRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12, borderTopWidth: 1 },
-  dow: { width: 24, fontSize: 14, fontWeight: '700' },
+  dayRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 13 },
   kindDot: { width: 8, height: 8, borderRadius: 4 },
-  woName: { flex: 1, fontSize: 15, fontWeight: '600' },
-  woNameDone: { textDecorationLine: 'line-through', opacity: 0.6 },
-  woDist: { fontSize: 14, fontVariant: ['tabular-nums'] },
-  doneCheck: { fontSize: 16, fontWeight: '800' },
-  zoneRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-  },
-  zoneLabel: { fontSize: 15, fontWeight: '600' },
-  zonePace: { fontSize: 15, fontVariant: ['tabular-nums'] },
-  tileGrid: { flexDirection: 'row', gap: 10, marginTop: 4 },
-  tile: { flex: 1, borderRadius: 14, borderWidth: 1, paddingVertical: 16, alignItems: 'center', gap: 6 },
-  tileEmoji: { fontSize: 20 },
-  tileText: { fontSize: 13, fontWeight: '700', textAlign: 'center' },
+  kraftTag: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 7, paddingVertical: 2, overflow: 'hidden' },
+  zoneRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 13 },
+  tileGrid: { flexDirection: 'row', gap: 10 },
+  tile: { flex: 1, borderRadius: 20, paddingVertical: 18, alignItems: 'center', gap: 10 },
+  tileIconWrap: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
 });

@@ -1,4 +1,5 @@
 import { allZones, type ZoneKey } from '../vdot/zones';
+import { predictRaceTime } from '../vdot/predict';
 import type {
   StepTarget,
   Workout,
@@ -117,6 +118,23 @@ export function makeRepetitions(
   const jog: WorkoutStep = { intensity: 'recovery', duration: { type: 'distance', meters: recoveryMeters }, target: paceTarget(vdot, 'easy') };
   const els: WorkoutElement[] = [warmup(vdot), { repeats: reps, steps: [work, jog] }, cooldown(vdot)];
   return finalize(id, 'repetition', `Wiederholungen ${reps}×${repMeters} m`, els);
+}
+
+/**
+ * Wettkampf-Workout (Zwischenevent, siehe planner/events.ts): ein einzelner Schritt
+ * über die volle Distanz im Zieltempo. Ohne `targetTimeSeconds` wird die Renn-Pace
+ * aus der aktuellen VDOT geschätzt (predictRaceTime) - dieselbe Umkehrfunktion, die
+ * auch die "Geschätzte Wettkampfzeiten"-Karte in der App speist.
+ */
+export function makeRace(id: string, vdot: number, distanceMeters: number, targetTimeSeconds?: number): Workout {
+  const seconds = targetTimeSeconds ?? predictRaceTime(vdot, distanceMeters);
+  const paceMps = seconds > 0 ? distanceMeters / seconds : 0;
+  const step: WorkoutStep = {
+    intensity: 'active',
+    duration: { type: 'distance', meters: distanceMeters },
+    target: { type: 'pace', lowMps: paceMps * 0.98, highMps: paceMps * 1.02 },
+  };
+  return finalize(id, 'race', `Wettkampf ${Math.round(distanceMeters / 100) / 10} km`, [step]);
 }
 
 export function makeRest(id: string): Workout {

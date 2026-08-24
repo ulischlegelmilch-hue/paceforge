@@ -18,6 +18,20 @@ export interface DetrainingAssessment {
 const DAY_MS = 24 * 3600 * 1000;
 
 /**
+ * Tage seit dem letzten geloggten Lauf (gebrochen, nicht gerundet). `null` ohne jede
+ * Historie. Auch von adaptation/returnToRunning.ts genutzt, damit der Gap nicht
+ * zweimal unterschiedlich berechnet wird.
+ */
+export function daysSinceLastRun(activities: CompletedActivity[], referenceDate: Date = new Date()): number | null {
+  if (activities.length === 0) return null;
+  const ref = referenceDate.getTime();
+  const since = activities
+    .map((a) => (ref - new Date(a.startTime).getTime()) / DAY_MS)
+    .filter((d) => d >= 0);
+  return since.length > 0 ? Math.min(...since) : null;
+}
+
+/**
  * Bewertet das Detraining-Risiko aus den zuletzt geloggten Aktivitäten.
  * Gibt `null` zurück, wenn keine Historie vorliegt oder alles im grünen Bereich ist.
  */

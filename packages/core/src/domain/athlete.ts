@@ -3,6 +3,7 @@
 
 import type { CourseTerrain } from '../advice/terrain';
 import type { EquipmentItem } from '../strength/index';
+import type { PlanEvent } from './event';
 
 export type RaceDistance = '5k' | '10k' | 'half' | 'marathon' | 'custom';
 
@@ -82,4 +83,6 @@ export interface AthleteProfile {
   weightKg?: number;
   /** Kraft-Modul-Einstellungen (optional; Default: aktiv, Körpergewicht). */
   strength?: StrengthPrefs;
+  /** Ad-hoc-Wettkämpfe mitten im Plan (siehe domain/event.ts, planner/events.ts). */
+  raceEvents?: PlanEvent[];
 }

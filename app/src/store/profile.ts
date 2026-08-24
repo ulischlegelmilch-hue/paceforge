@@ -2,10 +2,15 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import {
   applyAdaptation as applyAdaptationCore,
+  applyPlanEvent as applyPlanEventCore,
+  applyReturnRamp as applyReturnRampCore,
+  applyWeekLightening as applyWeekLighteningCore,
   equipmentFromOwnedItems,
   generatePlan,
   gradeAdjustedDistance,
+  matchActivity,
   mergePreservingHistory,
+  removePlanEvent as removePlanEventCore,
   vdotFromFitness,
   vdotFromRace,
   type AdaptationResult,
@@ -14,8 +19,13 @@ import {
   type EquipmentItem,
   type FitnessInput,
   type Goal,
+  type PlanEvent,
+  type PlanEventStatus,
+  type ReturnRampAssessment,
   type ScheduledWorkoutStatus,
   type TrainingPlan,
+  type WeeklyAnalysis,
+  type WeekLighteningAssessment,
 } from '@paceforge/core';
 
 import { createPersistStorage } from './storage';
@@ -70,6 +80,19 @@ interface ProfileState {
   /** Tauscht die Inhalte zweier Tage DERSELBEN Woche (Datum/Wochentag jedes Slots bleiben fix). */
   moveWorkout: (weekIndex: number, fromDayOfWeek: number, toDayOfWeek: number) => void;
   applyAdaptation: (result: AdaptationResult) => void;
+  /** Trägt ein Zwischenevent (Ad-hoc-Wettkampf) ein: Wettkampf-Tag + Taper/Erholung im Plan. */
+  addRaceEvent: (input: {
+    date: string;
+    distanceMeters: number;
+    name?: string;
+    targetTimeSeconds?: number;
+  }) => PlanEventStatus;
+  /** Entfernt ein Zwischenevent wieder, stellt das betroffene Zeitfenster zurück. */
+  removeRaceEvent: (eventId: string) => void;
+  /** Wendet eine Rückkehr-Rampe nach einer Trainingspause an (siehe returnToRunning.ts). */
+  applyReturnRamp: (assessment: ReturnRampAssessment) => void;
+  /** Dämpft die restlichen geplanten Einheiten der Woche nach viel planfremdem Laufen. */
+  applyWeekLightening: (assessment: WeekLighteningAssessment, analysis: WeeklyAnalysis) => void;
   /** Fitness aus einer neuen Bestzeit/Testleistung neu berechnen (VDOT + Plan). */
   updateFitnessFromRace: (input: {
     distanceMeters: number;
@@ -95,13 +118,29 @@ function patchProfile(
   return { profile: { ...s.profile, ...patch } };
 }
 
+/**
+ * Ordnet eine neu übernommene Aktivität einmalig der geplanten Einheit desselben
+ * Tages zu und schreibt das Ergebnis in `linkedScheduledWorkoutDate`, statt es bei
+ * jedem Render neu zu berechnen (siehe activities.tsx) - macht die Zuordnung
+ * stabil gegenüber späteren Plan-Neuberechnungen (mergePreservingHistory).
+ */
+function linkActivity(plan: TrainingPlan | null, activity: CompletedActivity): CompletedActivity {
+  if (!plan || activity.linkedScheduledWorkoutDate) return activity;
+  const matched = matchActivity(plan, activity);
+  return matched ? { ...activity, linkedScheduledWorkoutDate: matched.date } : activity;
+}
+
 function makeDeviceId(): string {
   return `dev-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function makeEventId(): string {
+  return `event-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
 export const useProfileStore = create<ProfileState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
   profile: null,
   plan: null,
   activities: [],
@@ -128,11 +167,12 @@ export const useProfileStore = create<ProfileState>()(
     set({ profile, plan, activities: [] });
     return profile;
   },
-  addActivity: (activity) => set((s) => ({ activities: [...s.activities, activity] })),
+  addActivity: (activity) =>
+    set((s) => ({ activities: [...s.activities, linkActivity(s.plan, activity)] })),
   addActivities: (newActivities) =>
     set((s) => {
       const existingIds = new Set(s.activities.map((a) => a.id));
-      const fresh = newActivities.filter((a) => !existingIds.has(a.id));
+      const fresh = newActivities.filter((a) => !existingIds.has(a.id)).map((a) => linkActivity(s.plan, a));
       return fresh.length > 0 ? { activities: [...s.activities, ...fresh] } : s;
     }),
   setWorkoutStatus: (weekIndex, dayOfWeek, status) =>
@@ -182,6 +222,45 @@ export const useProfileStore = create<ProfileState>()(
     set((s) => {
       if (!s.profile || !s.plan) return s;
       return applyAdaptationCore(s.profile, s.plan, result);
+    }),
+  addRaceEvent: (input) => {
+    const { profile, plan } = get();
+    if (!profile || !plan) return 'out-of-range';
+    const event: PlanEvent = {
+      id: makeEventId(),
+      date: input.date,
+      distanceMeters: input.distanceMeters,
+      ...(input.name ? { name: input.name } : {}),
+      ...(input.targetTimeSeconds ? { targetTimeSeconds: input.targetTimeSeconds } : {}),
+    };
+    const result = applyPlanEventCore(plan, event, profile.currentVdot, new Date());
+    if (result.status === 'applied') {
+      const raceEvents = [...(profile.raceEvents ?? []), event];
+      set({ profile: { ...profile, raceEvents }, plan: result.plan });
+    }
+    return result.status;
+  },
+  removeRaceEvent: (eventId) => {
+    const { profile, plan } = get();
+    if (!profile || !plan) return;
+    const event = profile.raceEvents?.find((e) => e.id === eventId);
+    if (!event) return;
+    const raceEvents = profile.raceEvents!.filter((e) => e.id !== eventId);
+    const profileWithoutEvent: AthleteProfile = { ...profile, raceEvents };
+    const newPlan = removePlanEventCore(plan, profileWithoutEvent, event, new Date());
+    set({ profile: profileWithoutEvent, plan: newPlan });
+  },
+  applyReturnRamp: (assessment) =>
+    set((s) => {
+      if (!s.profile || !s.plan) return s;
+      const plan = applyReturnRampCore(s.plan, assessment, s.profile.currentVdot, new Date());
+      return { plan };
+    }),
+  applyWeekLightening: (assessment, analysis) =>
+    set((s) => {
+      if (!s.plan) return s;
+      const plan = applyWeekLighteningCore(s.plan, assessment, analysis, new Date());
+      return { plan };
     }),
   updateFitnessFromRace: ({ distanceMeters, timeSeconds, ascentMeters }) =>
     set((s) => {

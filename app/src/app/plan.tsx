@@ -1,10 +1,13 @@
 import { useState } from 'react';
 import { useRouter } from 'expo-router';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { strengthScheduleForWeek } from '@paceforge/core';
 
 import { usePalette } from '@/ui/colors';
+import { title, heading, body, bodyStrong, caption } from '@/ui/typography';
+import { Card } from '@/ui/components/Card';
+import { Button } from '@/ui/components/Button';
 import { DOW_SHORT, formatDistance, phaseColor, phaseLabel, workoutKindColor } from '@/ui/format';
 import { useProfileStore } from '@/store/profile';
 import { exportPlanIcs } from '@/delivery/exportPlanIcs';
@@ -34,10 +37,8 @@ export default function PlanScreen() {
     return (
       <SafeAreaView style={[styles.fill, { backgroundColor: p.bg }]}>
         <View style={styles.empty}>
-          <Text style={[styles.emptyText, { color: p.subtext }]}>Noch kein Plan vorhanden.</Text>
-          <Pressable onPress={() => router.replace('/')} style={[styles.cta, { backgroundColor: p.accent }]}>
-            <Text style={[styles.ctaText, { color: p.accentText }]}>Zur Startseite</Text>
-          </Pressable>
+          <Text style={[body, { color: p.subtext }]}>Noch kein Plan vorhanden.</Text>
+          <Button title="Zur Startseite" onPress={() => router.replace('/')} style={{ paddingHorizontal: 22 }} />
         </View>
       </SafeAreaView>
     );
@@ -47,23 +48,20 @@ export default function PlanScreen() {
     <SafeAreaView style={[styles.fill, { backgroundColor: p.bg }]}>
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} hitSlop={12}>
-          <Text style={[styles.back, { color: p.accent }]}>‹ Zurück</Text>
+          <Text style={[caption, { color: p.accent }]}>‹ Zurück</Text>
         </Pressable>
-        <Text style={[styles.title, { color: p.text }]}>Dein Trainingsplan</Text>
-        <Text style={[styles.sub, { color: p.subtext }]}>{plan.weeks.length} Wochen</Text>
+        <Text style={[title, { color: p.text, marginTop: 6 }]}>Dein Trainingsplan</Text>
+        <Text style={[body, { color: p.subtext }]}>{plan.weeks.length} Wochen</Text>
         <Pressable onPress={() => router.push('/glossary')} hitSlop={6}>
-          <Text style={[styles.glossaryLink, { color: p.accent }]}>Workout-Arten erklärt ›</Text>
+          <Text style={[caption, { color: p.text, marginTop: 8 }]}>Workout-Arten erklärt ›</Text>
         </Pressable>
-        <Pressable
-          onPress={onExportIcs}
-          disabled={icsBusy}
-          style={({ pressed }) => [styles.icsBtn, { borderColor: p.accent, opacity: pressed || icsBusy ? 0.6 : 1 }]}
-        >
-          {icsBusy ? (
-            <ActivityIndicator color={p.accent} />
-          ) : (
-            <Text style={[styles.icsText, { color: p.accent }]}>📅 In Kalender exportieren (.ics)</Text>
-          )}
+        <Pressable onPress={onExportIcs} disabled={icsBusy} hitSlop={6}>
+          <Text style={[caption, { color: p.text, marginTop: 4, opacity: icsBusy ? 0.5 : 1 }]}>
+            In Kalender exportieren (.ics) ›
+          </Text>
+        </Pressable>
+        <Pressable onPress={() => router.push('/add-event')} hitSlop={6}>
+          <Text style={[caption, { color: p.text, marginTop: 4 }]}>Wettkampf eintragen ›</Text>
         </Pressable>
       </View>
 
@@ -73,29 +71,24 @@ export default function PlanScreen() {
           const done = training.filter((w) => w.status === 'completed').length;
           const strengthDays = new Set(strengthScheduleForWeek(week, eq, spw).map((s) => s.dayOfWeek));
           return (
-            <View key={week.index} style={[styles.card, { backgroundColor: p.card, borderColor: p.border }]}>
+            <Card key={week.index}>
               <View style={styles.weekHead}>
-                <Text style={[styles.weekTitle, { color: p.text }]}>Woche {week.index + 1}</Text>
+                <Text style={[heading, { color: p.text }]}>Woche {week.index + 1}</Text>
                 <View style={[styles.badge, { backgroundColor: phaseColor(week.phase) }]}>
-                  <Text style={styles.badgeText}>{phaseLabel(week.phase)}</Text>
+                  <Text style={[caption, { color: '#fff', fontSize: 11 }]}>{phaseLabel(week.phase)}</Text>
                 </View>
               </View>
-              <Text style={[styles.volume, { color: p.subtext }]}>
+              <Text style={[caption, { color: p.subtext, marginTop: 4, marginBottom: 8 }]}>
                 {formatDistance(week.targetWeeklyDistanceMeters)} geplant
                 {done > 0 ? ` · ${done}/${training.length} erledigt` : ''}
               </Text>
               {training.length > 0 && (
-                <View style={[styles.progressTrack, { backgroundColor: p.chipBg }]}>
-                  <View
-                    style={[
-                      styles.progressFill,
-                      { width: `${(done / training.length) * 100}%`, backgroundColor: '#16a34a' },
-                    ]}
-                  />
+                <View style={[styles.progressTrack, { backgroundColor: p.surfaceRaised }]}>
+                  <View style={[styles.progressFill, { width: `${(done / training.length) * 100}%`, backgroundColor: p.success }]} />
                 </View>
               )}
 
-              {training.map((sw) => {
+              {training.map((sw, i) => {
                 const isDone = sw.status === 'completed';
                 const isSkipped = sw.status === 'skipped';
                 const isMoved = sw.status === 'modified';
@@ -103,33 +96,38 @@ export default function PlanScreen() {
                   <Pressable
                     key={sw.date}
                     onPress={() => router.push({ pathname: '/workout', params: { week: week.index, day: sw.dayOfWeek } })}
-                    style={({ pressed }) => [styles.dayRow, { borderTopColor: p.border, opacity: pressed ? 0.6 : 1 }]}
+                    style={({ pressed }) => [
+                      styles.dayRow,
+                      i > 0 && { borderTopWidth: 1, borderTopColor: p.border },
+                      { opacity: pressed ? 0.6 : 1 },
+                    ]}
                   >
-                    <Text style={[styles.dow, { color: p.subtext }]}>{DOW_SHORT[sw.dayOfWeek]}</Text>
+                    <Text style={[caption, { width: 24, color: p.subtext }]}>{DOW_SHORT[sw.dayOfWeek]}</Text>
                     <View style={[styles.kindDot, { backgroundColor: workoutKindColor(sw.workout.kind) }]} />
-                    {isMoved && <Text style={[styles.movedTag, { color: p.accent }]}>↔</Text>}
-                    <Text
-                      style={[styles.woName, { color: p.text }, (isDone || isSkipped) && styles.woNameDone]}
-                      numberOfLines={1}
-                    >
+                    {sw.workout.kind === 'race' ? (
+                      <Text style={{ fontSize: 14 }}>🏁</Text>
+                    ) : (
+                      isMoved && <Text style={{ color: p.accent, fontSize: 13 }}>↔</Text>
+                    )}
+                    <Text style={[bodyStrong, { flex: 1, color: p.text }, (isDone || isSkipped) && styles.strike]} numberOfLines={1}>
                       {sw.workout.name}
                     </Text>
                     {strengthDays.has(sw.dayOfWeek) && (
-                      <Text style={[styles.kraftTag, { color: p.accent, borderColor: p.accent }]}>Kraft</Text>
+                      <Text style={[styles.kraftTag, caption, { color: p.accent, borderColor: p.accent }]}>Kraft</Text>
                     )}
                     {isDone ? (
-                      <Text style={[styles.doneCheck, { color: '#16a34a' }]}>✓</Text>
+                      <Text style={{ fontSize: 16, color: p.success }}>✓</Text>
                     ) : isSkipped ? (
-                      <Text style={[styles.doneCheck, { color: '#d97706' }]}>✕</Text>
+                      <Text style={{ fontSize: 16, color: p.warning }}>✕</Text>
                     ) : (
-                      <Text style={[styles.woDist, { color: p.subtext }]}>
+                      <Text style={[caption, { color: p.subtext }]}>
                         {formatDistance(sw.workout.estimatedDistanceMeters ?? 0)}
                       </Text>
                     )}
                   </Pressable>
                 );
               })}
-            </View>
+            </Card>
           );
         })}
       </ScrollView>
@@ -139,39 +137,15 @@ export default function PlanScreen() {
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  header: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12, gap: 2 },
-  back: { fontSize: 16, fontWeight: '600', marginBottom: 6 },
-  title: { fontSize: 24, fontWeight: '800' },
-  sub: { fontSize: 14 },
-  glossaryLink: { fontSize: 13, fontWeight: '600', marginTop: 6 },
+  header: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12 },
   scroll: { padding: 20, paddingTop: 4, gap: 14 },
-  card: { borderRadius: 16, borderWidth: 1, padding: 16 },
   weekHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  weekTitle: { fontSize: 17, fontWeight: '700' },
   badge: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
-  badgeText: { color: '#fff', fontSize: 12, fontWeight: '700' },
-  volume: { fontSize: 13, marginTop: 2, marginBottom: 6 },
   progressTrack: { height: 5, borderRadius: 3, overflow: 'hidden', marginBottom: 8 },
   progressFill: { height: 5, borderRadius: 3 },
-  dayRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: 12,
-    borderTopWidth: 1,
-  },
-  dow: { width: 24, fontSize: 14, fontWeight: '700' },
+  dayRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 13 },
   kindDot: { width: 8, height: 8, borderRadius: 4 },
-  woName: { flex: 1, fontSize: 15, fontWeight: '600' },
-  woNameDone: { textDecorationLine: 'line-through', opacity: 0.6 },
-  woDist: { fontSize: 14, fontVariant: ['tabular-nums'] },
-  doneCheck: { fontSize: 16, fontWeight: '800' },
-  kraftTag: { fontSize: 11, fontWeight: '700', borderWidth: 1, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 1, overflow: 'hidden' },
-  movedTag: { fontSize: 13, fontWeight: '800' },
-  icsBtn: { marginTop: 10, borderWidth: 1.5, borderRadius: 12, paddingVertical: 12, alignItems: 'center', minHeight: 44, justifyContent: 'center' },
-  icsText: { fontSize: 15, fontWeight: '700' },
+  strike: { textDecorationLine: 'line-through', opacity: 0.5 },
+  kraftTag: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 7, paddingVertical: 2, overflow: 'hidden' },
   empty: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 16, padding: 24 },
-  emptyText: { fontSize: 16 },
-  cta: { borderRadius: 14, paddingVertical: 14, paddingHorizontal: 22 },
-  ctaText: { fontSize: 16, fontWeight: '700' },
 });

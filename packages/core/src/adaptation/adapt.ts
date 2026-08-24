@@ -1,10 +1,10 @@
 import type { AthleteProfile } from '../domain/athlete';
 import type { CompletedActivity } from '../domain/activity';
-import type { PlanWeek, ScheduledWorkout, TrainingPlan } from '../domain/plan';
-import type { StepDuration, Workout } from '../domain/workout';
-import { isRepeatBlock } from '../domain/workout';
+import type { ScheduledWorkout, TrainingPlan } from '../domain/plan';
+import type { Workout } from '../domain/workout';
 import { generatePlan } from '../planner/generatePlan';
 import { mergePreservingHistory } from '../planner/mergePlan';
+import { scaleWeek } from '../planner/windowAdjust';
 import { gradeAdjustedDistance } from '../grade/index';
 import { isoDay } from '../util/date';
 
@@ -140,9 +140,23 @@ export function suggestAdaptation(
     notes.push(`${slower} der letzten ${recent.length} Läufe langsamer als geplant – Intensität wird leicht reduziert (VDOT −1).`);
   }
 
-  if (consecutiveMissed >= 2) {
+  // Eigene, nicht plangebundene Läufe (z. B. an Ruhetagen oder statt der
+  // geplanten Einheit) sollen die Entlastungs-Regel nicht auslösen, nur weil
+  // sie nicht exakt auf den geplanten Tag fallen - "verpasste Einheiten" heißt
+  // nicht "nicht trainiert". Zählt Kalendertage mit IRGENDeiner Aktivität in
+  // den letzten 7 Tagen vor dem Stichtag (unabhängig von Plan-Zuordnung).
+  const sevenDaysAgo = isoDay(new Date((opts.referenceDate ?? new Date()).getTime() - 7 * 86_400_000));
+  const recentTrainingDays = new Set(
+    activities.map((a) => ymd(a.startTime)).filter((d) => d >= sevenDaysAgo && d <= refYmd),
+  ).size;
+
+  if (consecutiveMissed >= 2 && recentTrainingDays < 2) {
     reduceNextWeekVolume = true;
     notes.push(`${consecutiveMissed} Einheiten in Folge verpasst – die nächste Woche wird entlastet.`);
+  } else if (consecutiveMissed >= 2) {
+    notes.push(
+      `${consecutiveMissed} geplante Einheiten in Folge nicht wie vorgesehen absolviert, aber ${recentTrainingDays} eigene Läufe in den letzten 7 Tagen – keine Entlastung nötig.`,
+    );
   }
 
   if (notes.length === 0) notes.push('Alles im Plan – aktuell keine Anpassung nötig.');
@@ -159,36 +173,6 @@ export function applyVdotAdaptation(profile: AthleteProfile, result: AdaptationR
 
 /** Anteil, auf den eine Entlastungswoche heruntergefahren wird. */
 export const RECOVERY_WEEK_FACTOR = 0.8;
-
-function scaleDuration(d: StepDuration, f: number): StepDuration {
-  if (d.type === 'time') return { type: 'time', seconds: Math.round(d.seconds * f) };
-  if (d.type === 'distance') return { type: 'distance', meters: Math.round(d.meters * f) };
-  return d;
-}
-
-function scaleWorkout(w: Workout, f: number): Workout {
-  if (w.elements.length === 0) return w; // Ruhetag unverändert
-  const elements = w.elements.map((el) =>
-    isRepeatBlock(el)
-      ? { ...el, steps: el.steps.map((s) => ({ ...s, duration: scaleDuration(s.duration, f) })) }
-      : { ...el, duration: scaleDuration(el.duration, f) },
-  );
-  return {
-    ...w,
-    elements,
-    estimatedDistanceMeters: Math.round((w.estimatedDistanceMeters ?? 0) * f),
-    estimatedDurationSeconds: Math.round((w.estimatedDurationSeconds ?? 0) * f),
-  };
-}
-
-function scaleWeek(week: PlanWeek, f: number): PlanWeek {
-  const workouts = week.workouts.map((sw) => ({ ...sw, workout: scaleWorkout(sw.workout, f) }));
-  return {
-    ...week,
-    workouts,
-    targetWeeklyDistanceMeters: workouts.reduce((s, sw) => s + (sw.workout.estimatedDistanceMeters ?? 0), 0),
-  };
-}
 
 /** Reduziert das Volumen der ersten noch nicht vergangenen Woche (Entlastung). */
 export function reduceUpcomingWeek(plan: TrainingPlan, referenceDate: Date, factor = RECOVERY_WEEK_FACTOR): TrainingPlan {
