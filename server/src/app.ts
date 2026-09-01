@@ -3,9 +3,11 @@ import { parseGoalSmart } from './parseGoalLLM';
 import { registerSync } from './sync';
 import { registerGarmin, type GarminConnectClient } from './garmin';
 import { registerKids } from './kids';
+import { registerLiveEvents } from './liveEvents';
 import { createSnapshotStore, type SnapshotStore } from './storage';
 import { createGarminSessionStore, type GarminSessionStore } from './garminStore';
 import { createKidsStore, type KidsStore } from './kidsStore';
+import { createLiveEventsStore, type LiveEventsStore } from './liveEventsStore';
 
 // Baut die Fastify-App OHNE zu lauschen – so kann sie im Test per app.inject()
 // angesprochen werden. Das Lauschen passiert nur in index.ts.
@@ -18,12 +20,14 @@ export function buildApp(
     garminStore?: GarminSessionStore;
     garminClientFactory?: () => Promise<GarminConnectClient>;
     kidsStore?: KidsStore;
+    liveEventsStore?: LiveEventsStore;
   } = {},
 ): FastifyInstance {
   const app = Fastify({ logger: false });
   const store = opts.store ?? createSnapshotStore();
   const garminStore = opts.garminStore ?? createGarminSessionStore();
   const kidsStore = opts.kidsStore ?? createKidsStore();
+  const liveEventsStore = opts.liveEventsStore ?? createLiveEventsStore();
 
   // CORS offen (die mobile App / der Web-Simulator greifen von woanders zu).
   app.addHook('onRequest', (_req, reply, done) => {
@@ -53,6 +57,8 @@ export function buildApp(
   registerGarmin(app, garminStore, opts.garminClientFactory);
   // PaceForge Kids: Max' aktuell eingestelltes Training (Kernfunktion 4a).
   registerKids(app, kidsStore);
+  // PaceForge Kids: Live-Ansagen-Relay für "Papa hört live mit".
+  registerLiveEvents(app, liveEventsStore);
 
   return app;
 }

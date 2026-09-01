@@ -148,6 +148,12 @@ export default function MaxScreen() {
                 )}
               </Card>
             )}
+            <Button
+              title="Live mithören"
+              variant="secondary"
+              onPress={() => router.push('/max-live')}
+              style={{ marginTop: 12 }}
+            />
             <Pressable onPress={() => void load(childCode)} hitSlop={8}>
               <Text style={[caption, { color: p.text, marginTop: 12 }]}>Aktualisieren ›</Text>
             </Pressable>
