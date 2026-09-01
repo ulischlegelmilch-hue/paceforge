@@ -144,6 +144,25 @@ function makeEventId(): string {
   return `event-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+// Migrations-Reparatur: Pläne, die VOR der Wochenstart-Montag-Umstellung
+// generiert wurden, gruppieren ihre PlanWeek-Blöcke noch So-Sa (siehe
+// project-Notiz "WOCHENSTART AUF MONTAG UMGESTELLT") - ein an einem Sonntag
+// eingetragener Wettkampf landet dadurch in der Anzeige fälschlich in der
+// "nächsten Woche" statt der laufenden. Erkennbar daran, dass der erste Tag
+// von Woche 0 kein Montag ist. Regeneriert den Plan mit demselben Startdatum
+// (jetzt Montag-anchored) und behält per mergePreservingHistory alle bereits
+// erledigten/übersprungenen/modifizierten Tage (inkl. eingetragener Wettkämpfe,
+// die als "modified" markiert sind) unverändert bei - nur die Wochen-Gruppierung
+// wird korrigiert, kein Trainingsinhalt geht verloren.
+function repairWeekAnchorIfNeeded(profile: AthleteProfile | null, plan: TrainingPlan | null): TrainingPlan | null {
+  const firstDate = plan?.weeks[0]?.workouts[0]?.date;
+  if (!profile || !plan || !firstDate) return plan;
+  const isMondayAnchored = new Date(`${firstDate}T00:00:00`).getDay() === 1;
+  if (isMondayAnchored) return plan;
+  const startDate = new Date(`${firstDate}T00:00:00`);
+  return mergePreservingHistory(plan, generatePlan(profile, { startDate }));
+}
+
 export const useProfileStore = create<ProfileState>()(
   persist(
     (set, get) => ({
@@ -365,7 +384,7 @@ export const useProfileStore = create<ProfileState>()(
   hydrateFromSnapshot: (snap) =>
     set({
       profile: snap.profile,
-      plan: snap.plan,
+      plan: repairWeekAnchorIfNeeded(snap.profile, snap.plan),
       activities: snap.activities ?? [],
       ...(snap.updatedAt ? { lastSyncedAt: snap.updatedAt } : {}),
     }),
@@ -384,6 +403,13 @@ export const useProfileStore = create<ProfileState>()(
         garminLastPullAt: s.garminLastPullAt,
         kidsChildCode: s.kidsChildCode,
       }),
+      onRehydrateStorage: () => (state) => {
+        if (!state) return;
+        const repairedPlan = repairWeekAnchorIfNeeded(state.profile, state.plan);
+        if (repairedPlan !== state.plan) {
+          useProfileStore.setState({ plan: repairedPlan });
+        }
+      },
     },
   ),
 );

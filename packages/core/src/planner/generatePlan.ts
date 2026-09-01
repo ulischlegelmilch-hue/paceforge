@@ -159,9 +159,9 @@ function longRunMeters(
 
 // ---- Datum-Helfer -----------------------------------------------------------
 
-function startOfWeekSunday(d: Date): Date {
+function startOfWeekMonday(d: Date): Date {
   const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  x.setDate(x.getDate() - x.getDay()); // zurück auf Sonntag
+  x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); // zurück auf Montag
   return x;
 }
 
@@ -202,7 +202,7 @@ export function generatePlan(profile: AthleteProfile, options: GenerateOptions =
   const longDay = profile.longRunDay;
   const availableDays = profile.availableDays;
 
-  const weekStart = startOfWeekSunday(options.startDate ?? new Date());
+  const weekStart = startOfWeekMonday(options.startDate ?? new Date());
 
   const weeks: PlanWeek[] = [];
   for (let w = 0; w < totalWeeks; w++) {
@@ -232,7 +232,13 @@ export function generatePlan(profile: AthleteProfile, options: GenerateOptions =
 
     const workouts: ScheduledWorkout[] = [];
     for (let d = 0; d < 7; d++) {
-      const role: Role | undefined = byDay.get(d);
+      const date = new Date(weekStart);
+      date.setDate(date.getDate() + w * 7 + d);
+      // dayOfWeek ist der ECHTE Kalendertag (0=So..6=Sa, siehe Slot-Typ), nicht
+      // der Schleifenindex - der Wochenstart-Anker (Montag) bestimmt nur die
+      // PlanWeek-Gruppierung, nicht welcher Wochentag welche Rolle bekommt.
+      const dow = date.getDay();
+      const role: Role | undefined = byDay.get(dow);
       const id = `w${w}-d${d}`;
       let workout: Workout;
       switch (role) {
@@ -254,9 +260,7 @@ export function generatePlan(profile: AthleteProfile, options: GenerateOptions =
         default:
           workout = makeRest(id);
       }
-      const date = new Date(weekStart);
-      date.setDate(date.getDate() + w * 7 + d);
-      workouts.push({ date: isoDate(date), dayOfWeek: d, workout, status: 'planned' });
+      workouts.push({ date: isoDate(date), dayOfWeek: dow, workout, status: 'planned' });
     }
 
     const targetWeeklyDistanceMeters = workouts.reduce(

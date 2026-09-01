@@ -15,7 +15,10 @@
       "url": "https://u.expo.dev/2502d7aa-cfc7-4a13-85d0-f6aa870321f4"
     },
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "infoPlist": {
+        "UIBackgroundModes": ["location", "audio"]
+      }
     },
     "android": {
       "package": "com.paceforge.app",
@@ -47,6 +50,22 @@
         "expo-notifications",
         {
           "color": "#C97A3E"
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "PaceForge nutzt deinen Standort, um während des Wettkampf-Audioguides deine gelaufene Distanz zu tracken.",
+          "locationAlwaysAndWhenInUsePermission": "PaceForge nutzt deinen Standort auch bei gesperrtem Bildschirm, damit der Wettkampf-Audioguide dich weiter per Ansage begleitet, wenn das Handy in der Tasche steckt.",
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "enableBackgroundPlayback": true
         }
       ]
     ],

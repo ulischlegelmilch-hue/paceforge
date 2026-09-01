@@ -1,23 +1,17 @@
 import { useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 import {
-  allZones,
   assessDetraining,
   classifyFreeRun,
   kindLabel,
   locateByDate,
-  paceMpsToPerKm,
-  predictedRaceTimes,
   strengthOnDay,
   strengthScheduleForWeek,
   weekOf,
   weeklyAnalysis,
   ymdOf,
   type RaceDistance,
-  type StandardRace,
-  type ZoneKey,
 } from '@paceforge/core';
 
 import { usePalette } from '@/ui/colors';
@@ -25,9 +19,8 @@ import { display, eyebrow, heading, title, body, bodyStrong, caption, button as 
 import { Card } from '@/ui/components/Card';
 import { Button } from '@/ui/components/Button';
 import { Eyebrow } from '@/ui/components/Eyebrow';
-import { DOW_SHORT, formatDistance, formatRaceTime, phaseColor, phaseLabel, workoutKindColor } from '@/ui/format';
+import { DOW_SHORT, formatDistance, phaseColor, phaseLabel, workoutKindColor } from '@/ui/format';
 import { useProfileStore } from '@/store/profile';
-import { hasBackend } from '@/config';
 
 const DISTANCE_LABEL: Record<RaceDistance, string> = {
   '5k': '5 km',
@@ -36,23 +29,6 @@ const DISTANCE_LABEL: Record<RaceDistance, string> = {
   marathon: 'Marathon',
   custom: 'Freie Distanz',
 };
-
-const ZONE_LABEL: Record<ZoneKey, string> = {
-  easy: 'Locker (E)',
-  marathon: 'Marathon (M)',
-  threshold: 'Schwelle (T)',
-  interval: 'Intervall (I)',
-  repetition: 'Wiederholung (R)',
-};
-
-const ZONE_ORDER: ZoneKey[] = ['easy', 'marathon', 'threshold', 'interval', 'repetition'];
-const RACE_ORDER: StandardRace[] = ['5k', '10k', 'half', 'marathon'];
-
-const TILES = [
-  { route: '/strength' as const, icon: 'barbell-outline' as const, label: 'Krafttraining' },
-  { route: '/nutrition' as const, icon: 'restaurant-outline' as const, label: 'Ernährung' },
-  { route: '/training' as const, icon: 'calendar-outline' as const, label: 'Trainingsumfang' },
-];
 
 export default function HomeScreen() {
   const p = usePalette();
@@ -77,12 +53,13 @@ export default function HomeScreen() {
     );
   }
 
-  const zones = allZones(profile.currentVdot);
-  const races = predictedRaceTimes(profile.currentVdot);
   const today = ymdOf(new Date());
   const todayLoc = plan ? locateByDate(plan, today) : undefined;
   const thisWeek = plan ? weekOf(plan, today) : undefined;
   const eq = profile.strength?.equipment ?? 'bodyweight';
+  const upcomingRaceEvent = (profile.raceEvents ?? [])
+    .filter((e) => e.date >= today)
+    .sort((a, b) => (a.date < b.date ? -1 : 1))[0];
   const spw = profile.strength?.sessionsPerWeek ?? 2;
   const todayDow = todayLoc?.scheduled.dayOfWeek ?? new Date().getDay();
   const todayStrength = thisWeek ? strengthOnDay(thisWeek, eq, spw, todayDow) : undefined;
@@ -123,37 +100,7 @@ export default function HomeScreen() {
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.header}>
           <Text style={[heading, { color: p.text, letterSpacing: -0.2 }]}>PaceForge</Text>
-          <Pressable
-            onPress={() => router.push('/more')}
-            hitSlop={10}
-            style={[styles.gearBtn, { backgroundColor: p.surfaceRaised }]}
-          >
-            <Ionicons name="settings-outline" size={19} color={p.text} />
-          </Pressable>
         </View>
-
-        {thisWeek && (
-          <View style={styles.weekStrip}>
-            {thisWeek.workouts.map((sw) => {
-              const isToday = sw.date === today;
-              const isRest = sw.workout.kind === 'rest';
-              return (
-                <View key={sw.date} style={styles.weekStripDay}>
-                  <Text style={[caption, { color: isToday ? p.accent : p.faint }]}>{DOW_SHORT[sw.dayOfWeek]}</Text>
-                  <View
-                    style={[
-                      styles.weekStripDot,
-                      isRest
-                        ? { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: p.border }
-                        : { backgroundColor: workoutKindColor(sw.workout.kind) },
-                      isToday && { borderWidth: 2, borderColor: p.accent },
-                    ]}
-                  />
-                </View>
-              );
-            })}
-          </View>
-        )}
 
         <Card style={styles.heroCard}>
           <Eyebrow>Dein Ziel</Eyebrow>
@@ -168,9 +115,6 @@ export default function HomeScreen() {
           <View style={styles.heroLinks}>
             <Pressable onPress={() => router.push('/recalibrate')} hitSlop={8}>
               <Text style={[caption, { color: p.text }]}>Neue Bestzeit? Fitness aktualisieren ›</Text>
-            </Pressable>
-            <Pressable onPress={() => router.push('/training')} hitSlop={8}>
-              <Text style={[caption, { color: p.text }]}>Trainingsumfang & Tipps ›</Text>
             </Pressable>
           </View>
         </Card>
@@ -234,6 +178,26 @@ export default function HomeScreen() {
                   {phaseLabel(thisWeek.phase)}
                 </Text>
               </View>
+            </View>
+            <View style={styles.weekStrip}>
+              {thisWeek.workouts.map((sw) => {
+                const isToday = sw.date === today;
+                const isRest = sw.workout.kind === 'rest';
+                return (
+                  <View key={sw.date} style={styles.weekStripDay}>
+                    <Text style={[caption, { color: isToday ? p.accent : p.faint, fontSize: 11 }]}>{DOW_SHORT[sw.dayOfWeek]}</Text>
+                    <View
+                      style={[
+                        styles.weekStripDot,
+                        isRest
+                          ? { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: p.border }
+                          : { backgroundColor: workoutKindColor(sw.workout.kind) },
+                        isToday && { borderWidth: 2, borderColor: p.accent },
+                      ]}
+                    />
+                  </View>
+                );
+              })}
             </View>
             {weekTraining.length > 0 && (
               <View style={styles.weekProgressRow}>
@@ -316,59 +280,19 @@ export default function HomeScreen() {
           </Card>
         )}
 
-        <Text style={[heading, { color: p.text, marginTop: 4 }]}>Deine Trainings-Paces</Text>
-        <Card>
-          {ZONE_ORDER.map((z, i) => (
-            <View key={z} style={[styles.zoneRow, i > 0 && { borderTopWidth: 1, borderTopColor: p.border }]}>
-              <Text style={[bodyStrong, { color: p.text }]}>{ZONE_LABEL[z]}</Text>
-              <Text style={[body, { color: p.subtext }]}>
-                {paceMpsToPerKm(zones[z].lowMps)}–{paceMpsToPerKm(zones[z].highMps)} /km
-              </Text>
-            </View>
-          ))}
-        </Card>
-
-        <Text style={[heading, { color: p.text, marginTop: 4 }]}>Geschätzte Wettkampfzeiten</Text>
-        <Card>
-          {RACE_ORDER.map((r, i) => (
-            <View key={r} style={[styles.zoneRow, i > 0 && { borderTopWidth: 1, borderTopColor: p.border }]}>
-              <Text style={[bodyStrong, { color: p.text }]}>{DISTANCE_LABEL[r]}</Text>
-              <Text style={[body, { color: p.subtext }]}>{formatRaceTime(races[r])}</Text>
-            </View>
-          ))}
-        </Card>
-
-        <Button title="Trainingsplan ansehen" onPress={() => router.push('/plan')} style={{ marginTop: 4 }} />
-        <Button
-          title="Fortschritt & Läufe importieren"
-          variant="secondary"
-          onPress={() => router.push('/activities')}
-        />
-        {hasBackend && (
-          <Button
-            title="Max' Training ansehen"
-            variant="secondary"
-            onPress={() => router.push('/max')}
-          />
+        {upcomingRaceEvent && (
+          <Card style={{ marginTop: 4 }}>
+            <Text style={[eyebrow, { color: p.subtext }]}>Nächster Wettkampf</Text>
+            <Text style={[bodyStrong, { color: p.text, marginTop: 4 }]}>
+              {upcomingRaceEvent.name ?? formatDistance(upcomingRaceEvent.distanceMeters)}
+            </Text>
+            <Button
+              title="Wettkampf-Audioguide öffnen"
+              onPress={() => router.push({ pathname: '/race-guide', params: { eventId: upcomingRaceEvent.id } })}
+              style={{ marginTop: 12 }}
+            />
+          </Card>
         )}
-
-        <Text style={[heading, { color: p.text, marginTop: 4 }]}>Mehr trainieren</Text>
-        <View style={styles.tileGrid}>
-          {TILES.map((t) => (
-            <Pressable
-              key={t.route}
-              onPress={() => router.push(t.route)}
-              style={({ pressed }) => [styles.tile, { backgroundColor: p.surface, opacity: pressed ? 0.7 : 1 }]}
-            >
-              <View style={[styles.tileIconWrap, { backgroundColor: p.accentSoft }]}>
-                <Ionicons name={t.icon} size={22} color={p.accent} />
-              </View>
-              <Text style={[caption, { color: p.text, fontFamily: buttonType.fontFamily, textAlign: 'center' }]}>
-                {t.label}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -378,12 +302,11 @@ const styles = StyleSheet.create({
   fill: { flex: 1 },
   centerWrap: { flex: 1, justifyContent: 'center', paddingHorizontal: 28 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  gearBtn: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
   scroll: { padding: 20, gap: 14 },
   heroCard: { paddingBottom: 22 },
   heroLinks: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginTop: 16 },
   strike: { textDecorationLine: 'line-through', opacity: 0.5 },
-  weekStrip: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 6, marginBottom: 2 },
+  weekStrip: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 6, marginTop: 10, marginBottom: 2 },
   weekStripDay: { alignItems: 'center', gap: 8 },
   weekStripDot: { width: 12, height: 12, borderRadius: 6 },
   weekHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 },

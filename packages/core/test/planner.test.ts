@@ -73,10 +73,10 @@ describe('generatePlan – Struktur', () => {
     expect(last.targetWeeklyDistanceMeters).toBeLessThan(peakMax);
   });
 
-  it('Datumsangaben laufen fortlaufend und starten am Wochenanfang (Sonntag)', () => {
+  it('Datumsangaben laufen fortlaufend und starten am Wochenanfang (Montag)', () => {
     const first = plan.weeks[0]!.workouts[0]!;
-    expect(first.dayOfWeek).toBe(0);
-    expect(new Date(first.date).getDay()).toBe(0);
+    expect(first.dayOfWeek).toBe(1);
+    expect(new Date(first.date).getDay()).toBe(1);
     // Woche 1, Tag 0 liegt 7 Tage nach Woche 0, Tag 0
     const w0d0 = new Date(plan.weeks[0]!.workouts[0]!.date).getTime();
     const w1d0 = new Date(plan.weeks[1]!.workouts[0]!.date).getTime();

@@ -15,6 +15,9 @@ import { startAutoBackup } from '@/sync/autoBackup';
 import { startAutoPullGarmin } from '@/sync/autoPullGarmin';
 import { startDailyReminders } from '@/notifications/dailyReminder';
 import { startWeeklyReview } from '@/notifications/weeklyReview';
+// Muss beim App-Start importiert werden, damit die Hintergrund-Standort-Task
+// registriert ist, bevor race-guide.tsx sie startet (siehe backgroundTask.ts).
+import '@/raceguide/backgroundTask';
 
 startAutoBackup();
 startAutoPullGarmin();
@@ -53,9 +56,8 @@ export default function RootLayout() {
     <>
       <StatusBar style="auto" />
       <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="index" />
+        <Stack.Screen name="(tabs)" />
         <Stack.Screen name="onboarding" />
-        <Stack.Screen name="plan" />
         <Stack.Screen name="workout" />
         <Stack.Screen name="activities" />
         <Stack.Screen name="activity-detail" />
@@ -65,9 +67,9 @@ export default function RootLayout() {
         <Stack.Screen name="nutrition" />
         <Stack.Screen name="training" />
         <Stack.Screen name="about" />
-        <Stack.Screen name="more" />
         <Stack.Screen name="glossary" />
         <Stack.Screen name="add-event" />
+        <Stack.Screen name="race-guide" />
         <Stack.Screen name="max" />
       </Stack>
     </>

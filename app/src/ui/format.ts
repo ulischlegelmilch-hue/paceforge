@@ -1,12 +1,19 @@
 import {
   paceMpsToPerKm,
   type Assessment,
+  type FuelingSummary,
   type PlanPhase,
   type StepDuration,
   type StepTarget,
   type WorkoutIntensity,
   type WorkoutKind,
 } from '@paceforge/core';
+
+/** Vorbereitungs-Hinweis fürs Detail eines langen Laufs/Wettkampfs, VOR dem Start. */
+export function fuelingPrepText(summary: FuelingSummary): string {
+  const times = summary.count === 1 ? '1×' : `${summary.count}×`;
+  return `Nimm Flüssigkeit und Gels mit – bei dieser Länge ist ca. alle ${summary.intervalMinutes} Min eine Verpflegungspause sinnvoll (${times} insgesamt).`;
+}
 
 export function formatDistance(meters: number): string {
   return meters >= 1000 ? `${(meters / 1000).toFixed(1).replace('.0', '')} km` : `${meters} m`;

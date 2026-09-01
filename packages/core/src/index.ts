@@ -49,6 +49,9 @@ export * from './advice/coachComment';
 // Kalender-Export (.ics)
 export * from './calendar/ics';
 
+// Wettkampf-Audioguide (Distanz-Framing, Verpflegungs-Zeitpunkte, Ansagen-Zeitplan)
+export * from './raceguide/index';
+
 // Höhenmeter → flaches Äquivalent (Minetti/Strava)
 export * from './grade/index';
 

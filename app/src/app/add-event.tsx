@@ -198,6 +198,9 @@ export default function AddEventScreen() {
                     <Text style={[caption, { color: p.subtext, marginTop: 2 }]}>
                       {dateLabel} · {formatDistance(ev.distanceMeters)}
                     </Text>
+                    <Pressable onPress={() => router.push({ pathname: '/race-guide', params: { eventId: ev.id } })} hitSlop={6}>
+                      <Text style={[caption, { color: p.accent, marginTop: 4 }]}>Audioguide testen ›</Text>
+                    </Pressable>
                   </View>
                   <Pressable onPress={() => confirmRemove(ev.id, label)} hitSlop={10}>
                     <Text style={{ color: p.warning, fontSize: 16 }}>✕</Text>

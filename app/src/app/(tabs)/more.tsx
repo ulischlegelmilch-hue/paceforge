@@ -200,10 +200,7 @@ export default function MoreScreen() {
   return (
     <SafeAreaView style={[styles.fill, { backgroundColor: p.bg }]}>
       <ScrollView contentContainerStyle={styles.scroll}>
-        <Pressable onPress={() => router.back()} hitSlop={12}>
-          <Text style={[caption, { color: p.accent }]}>‹ Zurück</Text>
-        </Pressable>
-        <Text style={[title, { color: p.text, marginTop: 4 }]}>Mehr</Text>
+        <Text style={[title, { color: p.text }]}>Mehr</Text>
 
         {hasBackend && (
           <Card>

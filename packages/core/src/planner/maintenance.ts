@@ -93,9 +93,9 @@ function easyMidMps(vdot: number): number {
 
 // ---- Datum-Helfer (identisch zu generatePlan) -------------------------------
 
-function startOfWeekSunday(d: Date): Date {
+function startOfWeekMonday(d: Date): Date {
   const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  x.setDate(x.getDate() - x.getDay());
+  x.setDate(x.getDate() - ((x.getDay() + 6) % 7));
   return x;
 }
 
@@ -130,7 +130,7 @@ export function generateMaintenancePlan(
   const longCapByTime = round500(easyMidMps(vdot) * LONG_RUN_TIME_CAP_SECONDS);
   const longM = Math.min(round500(weeklyM * LONG_RUN_FRACTION), longCapByTime);
 
-  const weekStart = startOfWeekSunday(options.startDate ?? new Date());
+  const weekStart = startOfWeekMonday(options.startDate ?? new Date());
 
   const weeks: PlanWeek[] = [];
   for (let w = 0; w < totalWeeks; w++) {
@@ -161,7 +161,11 @@ export function generateMaintenancePlan(
 
     const workouts: ScheduledWorkout[] = [];
     for (let d = 0; d < 7; d++) {
-      const role = byDay.get(d);
+      const date = new Date(weekStart);
+      date.setDate(date.getDate() + w * 7 + d);
+      // dayOfWeek ist der ECHTE Kalendertag (0=So..6=Sa) - siehe generatePlan.ts.
+      const dow = date.getDay();
+      const role = byDay.get(dow);
       const id = `m${w}-d${d}`;
       let workout: Workout;
       switch (role) {
@@ -180,9 +184,7 @@ export function generateMaintenancePlan(
         default:
           workout = makeRest(id);
       }
-      const date = new Date(weekStart);
-      date.setDate(date.getDate() + w * 7 + d);
-      workouts.push({ date: isoDate(date), dayOfWeek: d, workout, status: 'planned' });
+      workouts.push({ date: isoDate(date), dayOfWeek: dow, workout, status: 'planned' });
     }
 
     const targetWeeklyDistanceMeters = workouts.reduce(

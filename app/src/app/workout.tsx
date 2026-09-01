@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { currentWeekIndex, isRepeatBlock, ymdOf, type WorkoutStep } from '@paceforge/core';
+import { currentWeekIndex, fuelingSummary, isRepeatBlock, ymdOf, type WorkoutStep } from '@paceforge/core';
 
 import { fitFileProvider } from '@/delivery/FitFileProvider';
 import { activeDeliveryProvider } from '@/delivery/providers';
@@ -16,6 +16,7 @@ import {
   durationText,
   formatDistance,
   formatDuration,
+  fuelingPrepText,
   intensityLabel,
   targetText,
   workoutKindColor,
@@ -60,6 +61,7 @@ export default function WorkoutScreen() {
   }
 
   const { workout } = scheduled;
+  const fueling = fuelingSummary(workout.estimatedDistanceMeters ?? 0, workout.estimatedDurationSeconds ?? 0);
   const scheduledDate = scheduled.date;
   const date = new Date(scheduledDate);
   const [exporting, setExporting] = useState(false);
@@ -136,6 +138,30 @@ export default function WorkoutScreen() {
             </Text>
           </View>
         </View>
+
+        {fueling && (
+          <Card style={{ marginTop: 14 }}>
+            <Text style={[body, { color: p.text }]}>{fuelingPrepText(fueling)}</Text>
+          </Card>
+        )}
+
+        {workout.kind !== 'rest' && (workout.estimatedDistanceMeters ?? 0) > 0 && (
+          <Button
+            title="Audioguide für diesen Lauf starten"
+            variant="secondary"
+            onPress={() =>
+              router.push({
+                pathname: '/race-guide',
+                params: {
+                  distanceMeters: String(workout.estimatedDistanceMeters),
+                  estimatedTotalSeconds: String(workout.estimatedDurationSeconds ?? 0),
+                  name: workout.name,
+                },
+              })
+            }
+            style={{ marginTop: 12 }}
+          />
+        )}
 
         {scheduled.status === 'modified' && (
           <Text style={[caption, { color: p.subtext, marginTop: 12, fontStyle: 'italic' }]}>

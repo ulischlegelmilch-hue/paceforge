@@ -23,3 +23,7 @@ app/ios/
 
 # Generierte/ exportierte FIT-Dateien (Testartefakte)
 *.fit
+
+# Audioguide-Sprachgenerierung (ElevenLabs-Output, groß + reproduzierbar)
+tools/audio-generation/output/
+tools/audio-generation/__pycache__/
