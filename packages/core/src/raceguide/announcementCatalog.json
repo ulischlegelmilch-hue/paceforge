@@ -1,0 +1,39 @@
+{
+  "kmRange": { "min": 1, "max": 21 },
+  "start": [
+    "Los geht's! Ich begleite dich durch deine Strecke heute.",
+    "Auf geht's, ich bin heute an deiner Seite. Viel Erfolg!"
+  ],
+  "kmCovered": [
+    "Kilometer {km} geschafft, weiter so!",
+    "{km} Kilometer sind geschafft.",
+    "Du hast jetzt {km} Kilometer hinter dir.",
+    "Kilometer {km} – super Rhythmus, mach weiter!"
+  ],
+  "kmRemaining": [
+    "Noch {km} Kilometer bis ins Ziel.",
+    "Nur noch {km} Kilometer, du schaffst das!",
+    "{km} Kilometer liegen noch vor dir.",
+    "Noch {km} Kilometer – bleib dran!"
+  ],
+  "halfway": [
+    "Die Hälfte ist geschafft, weiter im gleichen Tempo!",
+    "Halbzeit! Der Rest schaffst du genauso stark."
+  ],
+  "fueling": [
+    "Zeit für ein Gel oder etwas Traubenzucker.",
+    "Denk an deine Verpflegung – jetzt ist ein guter Moment für ein Gel.",
+    "Ein bisschen Energie nachladen: Gel oder Traubenzucker, dann geht's weiter.",
+    "Kurzer Verpflegungs-Reminder: ein Gel oder Traubenzucker tut jetzt gut."
+  ],
+  "finalStretch": [
+    "Die letzten Meter – gib jetzt alles, was du hast!",
+    "Fast geschafft, das Ziel ist zum Greifen nah!",
+    "Jetzt zeigst du, was in dir steckt – bis ins Ziel!"
+  ],
+  "finish": [
+    "Geschafft! Das ist eine großartige Leistung – gratuliere!",
+    "Ziel erreicht! Auf dich kannst du richtig stolz sein.",
+    "Und im Ziel! Stark gelaufen, das war beeindruckend."
+  ]
+}
