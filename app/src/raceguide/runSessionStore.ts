@@ -24,6 +24,8 @@ interface RaceGuideState {
   firedSlotIds: Set<string>;
   lastAnnouncementText: string | null;
   backgroundGranted: boolean;
+  lastAccuracyMeters: number | null;
+  weakSignal: boolean;
 
   start: (event: PlanEvent, estimatedTotalSeconds: number) => Promise<'ok' | 'permission-denied'>;
   pause: () => Promise<void>;
@@ -43,7 +45,27 @@ const initialSessionState = {
   firedSlotIds: new Set<string>(),
   lastAnnouncementText: null as string | null,
   backgroundGranted: false,
+  lastAccuracyMeters: null as number | null,
+  weakSignal: false,
 };
+
+// Ab wie vielen HINTEREINANDER verworfenen Rohpunkten der "schwaches Signal"-
+// Hinweis in der UI erscheint - ein einzelner Ausreißer soll nicht sofort
+// Panik machen, aber ein Dauerzustand (siehe 0-km-Vorfall vom 30.08.) schon.
+const WEAK_SIGNAL_STREAK_THRESHOLD = 5;
+let rejectStreak = 0;
+
+function makeRawSampleHandler(set: (partial: Partial<RaceGuideState>) => void) {
+  return (accuracyMeters: number | null, accepted: boolean) => {
+    if (accepted) {
+      rejectStreak = 0;
+      set({ lastAccuracyMeters: accuracyMeters, weakSignal: false });
+      return;
+    }
+    rejectStreak += 1;
+    set({ lastAccuracyMeters: accuracyMeters, weakSignal: rejectStreak >= WEAK_SIGNAL_STREAK_THRESHOLD });
+  };
+}
 
 export const useRaceGuideStore = create<RaceGuideState>()((set, get) => ({
   ...initialSessionState,
@@ -69,9 +91,15 @@ export const useRaceGuideStore = create<RaceGuideState>()((set, get) => ({
       firedSlotIds: new Set(),
       lastAnnouncementText: null,
       backgroundGranted: permissions.backgroundGranted,
+      lastAccuracyMeters: null,
+      weakSignal: false,
     });
+    rejectStreak = 0;
 
-    await startRaceGuideTracking({ onDistanceUpdate: (m) => handleDistanceUpdate(m, set, get) });
+    await startRaceGuideTracking({
+      onDistanceUpdate: (m) => handleDistanceUpdate(m, set, get),
+      onRawSample: makeRawSampleHandler(set),
+    });
     raceGuideAudioQueue.enqueue(resolveAnnouncement('start'));
 
     return 'ok';
@@ -87,7 +115,11 @@ export const useRaceGuideStore = create<RaceGuideState>()((set, get) => ({
 
   resume: async () => {
     set({ status: 'running', startedAt: Date.now() });
-    await startRaceGuideTracking({ onDistanceUpdate: (m) => handleDistanceUpdate(m, set, get) }, { reset: false });
+    rejectStreak = 0;
+    await startRaceGuideTracking(
+      { onDistanceUpdate: (m) => handleDistanceUpdate(m, set, get), onRawSample: makeRawSampleHandler(set) },
+      { reset: false },
+    );
   },
 
   stop: async () => {

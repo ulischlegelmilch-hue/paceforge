@@ -43,6 +43,8 @@ export default function RaceGuideScreen() {
   const distanceMeters = useRaceGuideStore((s) => s.distanceMeters);
   const lastAnnouncementText = useRaceGuideStore((s) => s.lastAnnouncementText);
   const backgroundGranted = useRaceGuideStore((s) => s.backgroundGranted);
+  const weakSignal = useRaceGuideStore((s) => s.weakSignal);
+  const lastAccuracyMeters = useRaceGuideStore((s) => s.lastAccuracyMeters);
   const start = useRaceGuideStore((s) => s.start);
   const pause = useRaceGuideStore((s) => s.pause);
   const resume = useRaceGuideStore((s) => s.resume);
@@ -198,6 +200,13 @@ export default function RaceGuideScreen() {
           <Text style={[caption, { color: p.warning, marginTop: 10, textAlign: 'center', maxWidth: 280 }]}>
             Kein Hintergrund-Standortzugriff erlaubt – der Guide funktioniert nur, solange die App im
             Vordergrund bleibt.
+          </Text>
+        )}
+
+        {weakSignal && (
+          <Text style={[caption, { color: p.warning, marginTop: 10, textAlign: 'center', maxWidth: 280 }]}>
+            Schwaches GPS-Signal{lastAccuracyMeters != null ? ` (~${Math.round(lastAccuracyMeters)}m Ungenauigkeit)` : ''} –
+            freien Himmel suchen, Distanz kann ungenau oder verzögert sein.
           </Text>
         )}
 

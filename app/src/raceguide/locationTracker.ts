@@ -39,6 +39,10 @@ export async function requestRaceGuidePermissions(): Promise<RaceGuidePermission
 
 export interface RaceGuideTrackerCallbacks {
   onDistanceUpdate: (totalMeters: number) => void;
+  /** Jede eingehende Rohposition, auch verworfene - für eine Live-Diagnoseanzeige,
+   *  damit ein 0-km-Lauf künftig live als "Signal schwach" statt erst hinterher als
+   *  Rätsel sichtbar wird (siehe Kommentar zum 0-km-Vorfall vom 30.08. oben). */
+  onRawSample?: (accuracyMeters: number | null, accepted: boolean) => void;
 }
 
 let lastPoint: GeoPoint | null = null;
@@ -65,6 +69,7 @@ export async function startRaceGuideTracking(
         const acceptAsFallback = stalled && accuracy <= FALLBACK_ACCURACY_M;
         if (!acceptAsFallback) {
           console.warn(`[raceguide] Punkt verworfen, Genauigkeit ${Math.round(accuracy)}m`);
+          callbacks.onRawSample?.(accuracy, false);
           continue;
         }
         console.warn(`[raceguide] Fallback: Punkt mit ${Math.round(accuracy)}m trotzdem angenommen (kein besserer seit ${STALL_TIMEOUT_MS}ms)`);
@@ -76,6 +81,7 @@ export async function startRaceGuideTracking(
       }
       lastPoint = point;
       lastAcceptedAt = now;
+      callbacks.onRawSample?.(accuracy, true);
       callbacks.onDistanceUpdate(totalMeters);
     }
   });
