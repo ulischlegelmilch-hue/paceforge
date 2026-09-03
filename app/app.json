@@ -17,7 +17,10 @@
     "ios": {
       "icon": "./assets/expo.icon",
       "infoPlist": {
-        "UIBackgroundModes": ["location", "audio"]
+        "UIBackgroundModes": [
+          "location",
+          "audio"
+        ]
       }
     },
     "android": {
@@ -66,6 +69,15 @@
         "expo-audio",
         {
           "enableBackgroundPlayback": true
+        }
+      ],
+      [
+        "react-native-ble-plx",
+        {
+          "isBackgroundEnabled": false,
+          "modes": ["central"],
+          "neverForLocation": true,
+          "bluetoothAlwaysPermission": "PaceForge nutzt Bluetooth, um Max' Ansagen direkt zu empfangen, wenn ihr zusammen unterwegs seid."
         }
       ]
     ],
