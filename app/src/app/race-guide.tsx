@@ -45,6 +45,7 @@ export default function RaceGuideScreen() {
   const backgroundGranted = useRaceGuideStore((s) => s.backgroundGranted);
   const weakSignal = useRaceGuideStore((s) => s.weakSignal);
   const lastAccuracyMeters = useRaceGuideStore((s) => s.lastAccuracyMeters);
+  const gpsDisabled = useRaceGuideStore((s) => s.gpsDisabled);
   const start = useRaceGuideStore((s) => s.start);
   const pause = useRaceGuideStore((s) => s.pause);
   const resume = useRaceGuideStore((s) => s.resume);
@@ -203,11 +204,18 @@ export default function RaceGuideScreen() {
           </Text>
         )}
 
-        {weakSignal && (
+        {gpsDisabled ? (
           <Text style={[caption, { color: p.warning, marginTop: 10, textAlign: 'center', maxWidth: 280 }]}>
-            Schwaches GPS-Signal{lastAccuracyMeters != null ? ` (~${Math.round(lastAccuracyMeters)}m Ungenauigkeit)` : ''} –
-            freien Himmel suchen, Distanz kann ungenau oder verzögert sein.
+            GPS ist ausgeschaltet – bitte in den Systemeinstellungen aktivieren. Der Guide erkennt das automatisch
+            und trackt dann weiter, ohne dass du ihn neu starten musst.
           </Text>
+        ) : (
+          weakSignal && (
+            <Text style={[caption, { color: p.warning, marginTop: 10, textAlign: 'center', maxWidth: 280 }]}>
+              Schwaches GPS-Signal{lastAccuracyMeters != null ? ` (~${Math.round(lastAccuracyMeters)}m Ungenauigkeit)` : ''} –
+              freien Himmel suchen, Distanz kann ungenau oder verzögert sein.
+            </Text>
+          )
         )}
 
         {lastAnnouncementText && (

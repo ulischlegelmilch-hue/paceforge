@@ -37,6 +37,15 @@ export async function requestRaceGuidePermissions(): Promise<RaceGuidePermission
   return { granted: true, backgroundGranted: background.status === 'granted' };
 }
 
+// App-Berechtigung (oben) ist unabhängig vom GERÄTE-GPS-Schalter - mit erteilter
+// Berechtigung aber ausgeschaltetem GPS läuft startLocationUpdatesAsync klaglos an,
+// liefert aber nie Punkte, wodurch die Distanz für immer bei 0 hängen bleibt (siehe
+// runSessionStore.ts gpsDisabled-Watchdog, der das hierüber erkennt).
+export async function isLocationServicesEnabled(): Promise<boolean> {
+  if (Platform.OS === 'web') return true;
+  return Location.hasServicesEnabledAsync();
+}
+
 export interface RaceGuideTrackerCallbacks {
   onDistanceUpdate: (totalMeters: number) => void;
   /** Jede eingehende Rohposition, auch verworfene - für eine Live-Diagnoseanzeige,
