@@ -33,9 +33,9 @@ interface RaceGuideState {
   weakSignal: boolean;
   gpsDisabled: boolean;
 
-  start: (event: PlanEvent, estimatedTotalSeconds: number) => Promise<'ok' | 'permission-denied'>;
+  start: (event: PlanEvent, estimatedTotalSeconds: number) => Promise<'ok' | 'permission-denied' | 'gps-disabled'>;
   pause: () => Promise<void>;
-  resume: () => Promise<void>;
+  resume: () => Promise<'ok' | 'gps-disabled'>;
   stop: () => Promise<void>;
   reset: () => void;
 }
@@ -123,13 +123,16 @@ export const useRaceGuideStore = create<RaceGuideState>()((set, get) => ({
   start: async (event, estimatedTotalSeconds) => {
     const permissions = await requestRaceGuidePermissions();
     if (!permissions.granted) return 'permission-denied';
+    // Erst hier prüfen, nicht erst nachdem die Session schon "running" gesetzt ist -
+    // sonst startet der Guide scheinbar normal und die Distanz bleibt bei 0, ohne
+    // dass Uli das vor dem Loslaufen mitbekommt.
+    if (!(await isLocationServicesEnabled())) return 'gps-disabled';
 
     resetPhraseResolver();
     await raceGuideAudioQueue.configureAudioSession();
     raceGuideAudioQueue.setOnAnnounce((item) => set({ lastAnnouncementText: item.text }));
 
     const schedule = buildAnnouncementSchedule(event.distanceMeters, estimatedTotalSeconds);
-    const gpsDisabled = !(await isLocationServicesEnabled());
 
     set({
       status: 'running',
@@ -144,7 +147,7 @@ export const useRaceGuideStore = create<RaceGuideState>()((set, get) => ({
       backgroundGranted: permissions.backgroundGranted,
       lastAccuracyMeters: null,
       weakSignal: false,
-      gpsDisabled,
+      gpsDisabled: false,
     });
     rejectStreak = 0;
 
@@ -168,14 +171,15 @@ export const useRaceGuideStore = create<RaceGuideState>()((set, get) => ({
   },
 
   resume: async () => {
-    const gpsDisabled = !(await isLocationServicesEnabled());
-    set({ status: 'running', startedAt: Date.now(), gpsDisabled });
+    if (!(await isLocationServicesEnabled())) return 'gps-disabled';
+    set({ status: 'running', startedAt: Date.now(), gpsDisabled: false });
     rejectStreak = 0;
     await startRaceGuideTracking(
       { onDistanceUpdate: (m) => handleDistanceUpdate(m, set, get), onRawSample: makeRawSampleHandler(set) },
       { reset: false },
     );
     startGpsWatchdog(set, get);
+    return 'ok';
   },
 
   stop: async () => {

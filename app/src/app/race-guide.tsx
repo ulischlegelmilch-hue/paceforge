@@ -111,6 +111,21 @@ export default function RaceGuideScreen() {
         'Standortzugriff nötig',
         'Der Audioguide braucht Zugriff auf deinen Standort, um deine Distanz zu tracken. Bitte in den Systemeinstellungen erlauben.',
       );
+    } else if (result === 'gps-disabled') {
+      Alert.alert(
+        'GPS ist ausgeschaltet',
+        'Bitte aktiviere GPS/Standort in den Systemeinstellungen und starte den Guide dann erneut.',
+      );
+    }
+  }
+
+  async function onResume() {
+    const result = await resume();
+    if (result === 'gps-disabled') {
+      Alert.alert(
+        'GPS ist ausgeschaltet',
+        'Bitte aktiviere GPS/Standort in den Systemeinstellungen, um weiterzumachen.',
+      );
     }
   }
 
@@ -228,7 +243,7 @@ export default function RaceGuideScreen() {
           {status === 'running' ? (
             <Button title="Pause" variant="secondary" onPress={() => void pause()} style={styles.controlButton} />
           ) : (
-            <Button title="Weiter" onPress={() => void resume()} style={styles.controlButton} />
+            <Button title="Weiter" onPress={() => void onResume()} style={styles.controlButton} />
           )}
           <Button title="Beenden" variant="ghost" onPress={onStop} style={styles.controlButton} />
         </View>
