@@ -70,15 +70,6 @@
         {
           "enableBackgroundPlayback": true
         }
-      ],
-      [
-        "react-native-ble-plx",
-        {
-          "isBackgroundEnabled": false,
-          "modes": ["central"],
-          "neverForLocation": true,
-          "bluetoothAlwaysPermission": "PaceForge nutzt Bluetooth, um Max' Ansagen direkt zu empfangen, wenn ihr zusammen unterwegs seid."
-        }
       ]
     ],
     "experiments": {
