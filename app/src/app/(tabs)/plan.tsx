@@ -36,12 +36,19 @@ export default function PlanScreen() {
   // Plan-Tag, sonst den eigenen Kalendertag) - für die Vergangenheits-Ansicht
   // unten: dort zählt "was ist an diesem Tag wirklich passiert", nicht der
   // ursprüngliche Plan-Eintrag (siehe activities.tsx für dasselbe Matching-Muster).
-  const activityByDate = useMemo(() => {
-    const map = new Map<string, CompletedActivity>();
+  // Liste statt Einzel-Aktivität pro Datum: zwei Läufe am selben Tag (z.B. ein
+  // nachgeholter verpasster Lauf + der eigentlich für heute geplante) gingen
+  // vorher spurlos verloren, weil die zweite Aktivität die erste in der Map
+  // stillschweigend überschrieb (Uli-Meldung 11.09. "Trainings ... werden
+  // nicht hinzugefügt").
+  const activitiesByDate = useMemo(() => {
+    const map = new Map<string, CompletedActivity[]>();
     if (!plan) return map;
     for (const a of activities) {
       const date = a.linkedScheduledWorkoutDate ?? matchActivity(plan, a)?.date ?? a.startTime.slice(0, 10);
-      map.set(date, a);
+      const existing = map.get(date);
+      if (existing) existing.push(a);
+      else map.set(date, [a]);
     }
     return map;
   }, [activities, plan]);
@@ -99,9 +106,19 @@ export default function PlanScreen() {
 
           if (isPastWeek) {
             const pastDays = week.workouts
-              .map((sw) => ({ sw, activity: activityByDate.get(sw.date) }))
-              .filter((row): row is { sw: (typeof week.workouts)[number]; activity: CompletedActivity } => !!row.activity);
-            const actualTotal = pastDays.reduce((sum, row) => sum + row.activity.totalDistanceMeters, 0);
+              .map((sw) => {
+                const dayActivities = activitiesByDate.get(sw.date);
+                if (!dayActivities || dayActivities.length === 0) return null;
+                // Bei mehreren Aktivitäten am selben Tag (z.B. nachgeholter verpasster
+                // Lauf + eigentlich geplanter) gilt die längste als "die" Einheit für
+                // Soll-Ist-Vergleich/Detailansicht, die Distanz-Anzeige summiert aber
+                // alle - keine geht mehr stillschweigend verloren.
+                const primary = dayActivities.reduce((a, b) => (b.totalDistanceMeters > a.totalDistanceMeters ? b : a));
+                const totalDistanceMeters = dayActivities.reduce((sum, a) => sum + a.totalDistanceMeters, 0);
+                return { sw, activity: primary, totalDistanceMeters };
+              })
+              .filter((row): row is { sw: (typeof week.workouts)[number]; activity: CompletedActivity; totalDistanceMeters: number } => !!row);
+            const actualTotal = pastDays.reduce((sum, row) => sum + row.totalDistanceMeters, 0);
             const weekComment =
               pastDays.length === 0
                 ? coachCommentForWeek(weeklyAnalysis(plan, activities, new Date(`${week.workouts[0]!.date}T00:00:00`)))
@@ -118,7 +135,7 @@ export default function PlanScreen() {
                 <Text style={[caption, { color: p.subtext, marginTop: 4, marginBottom: 8 }]}>
                   {pastDays.length > 0 ? `${formatDistance(actualTotal)} gelaufen` : weekComment}
                 </Text>
-                {pastDays.map(({ sw, activity }, i) => {
+                {pastDays.map(({ sw, activity, totalDistanceMeters }, i) => {
                   const assessment = sw.workout.kind !== 'rest' ? compareWorkout(sw.workout, activity).assessment : undefined;
                   return (
                     <Pressable
@@ -132,7 +149,7 @@ export default function PlanScreen() {
                     >
                       <Text style={[caption, { width: 24, color: p.subtext }]}>{DOW_SHORT[sw.dayOfWeek]}</Text>
                       <Text style={[bodyStrong, { flex: 1, color: p.text }]} numberOfLines={1}>
-                        {formatDistance(activity.totalDistanceMeters)}
+                        {formatDistance(totalDistanceMeters)}
                       </Text>
                       {assessment && (
                         <View style={[styles.badge, { backgroundColor: assessmentColor(assessment) }]}>
