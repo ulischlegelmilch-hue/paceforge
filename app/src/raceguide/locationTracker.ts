@@ -19,9 +19,19 @@ import { RACE_GUIDE_LOCATION_TASK, setRaceGuideLocationListener } from './backgr
 // Fallback dagegen: bleibt der Filter länger als STALL_TIMEOUT_MS ohne akzeptierten
 // Punkt hängen, wird ein mäßig ungenauer Punkt (bis FALLBACK_ACCURACY_M) statt
 // komplett nichts angenommen - lieber leicht ungenaue Distanz als dauerhaft 0.
+//
+// Harter Fallback: der FALLBACK_ACCURACY_M-Deckel (100m) war selbst starr - blieb
+// die Genauigkeit LÄNGER als STALL_TIMEOUT_MS durchgängig schlechter als dieser
+// Deckel (z.B. unter Bäumen/bei bedecktem Himmel teils über viele Minuten), wurde
+// weiterhin JEDER Punkt verworfen und die Distanz blieb für den Rest des Laufs bei 0
+// (dasselbe Muster wie beim PaceForge-Kids-Gegenstück, GpsOutlierFilter.kt - dort
+// bei Max' echtem Lauf am 11.09.2026 aufgefallen: bis zur Hälfte der Strecke keine
+// Meter gezählt). Ab HARD_STALL_TIMEOUT_MS ohne akzeptierten Punkt wird der nächste
+// Punkt daher bedingungslos akzeptiert, egal wie schlecht die Genauigkeit ist.
 const MAX_ACCEPTABLE_ACCURACY_M = 25;
 const FALLBACK_ACCURACY_M = 100;
 const STALL_TIMEOUT_MS = 20_000;
+const HARD_STALL_TIMEOUT_MS = 60_000;
 
 export interface RaceGuidePermissionResult {
   granted: boolean;
@@ -89,8 +99,10 @@ export async function startRaceGuideTracking(
         continue;
       }
 
-      const stalled = now - lastAcceptedAt > STALL_TIMEOUT_MS;
-      if (accuracy != null && accuracy > MAX_ACCEPTABLE_ACCURACY_M) {
+      const stalledMs = now - lastAcceptedAt;
+      const hardStalled = stalledMs > HARD_STALL_TIMEOUT_MS;
+      if (!hardStalled && accuracy != null && accuracy > MAX_ACCEPTABLE_ACCURACY_M) {
+        const stalled = stalledMs > STALL_TIMEOUT_MS;
         const acceptAsFallback = stalled && accuracy <= FALLBACK_ACCURACY_M;
         if (!acceptAsFallback) {
           console.warn(`[raceguide] Punkt verworfen, Genauigkeit ${Math.round(accuracy)}m`);
@@ -98,6 +110,8 @@ export async function startRaceGuideTracking(
           continue;
         }
         console.warn(`[raceguide] Fallback: Punkt mit ${Math.round(accuracy)}m trotzdem angenommen (kein besserer seit ${STALL_TIMEOUT_MS}ms)`);
+      } else if (hardStalled && accuracy != null && accuracy > MAX_ACCEPTABLE_ACCURACY_M) {
+        console.warn(`[raceguide] Harter Fallback: Punkt mit ${Math.round(accuracy)}m trotzdem angenommen (kein besserer seit ${HARD_STALL_TIMEOUT_MS}ms)`);
       }
 
       totalMeters += haversineMeters(lastPoint, point);
