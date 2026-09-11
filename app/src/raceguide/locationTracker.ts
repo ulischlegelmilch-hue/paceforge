@@ -72,8 +72,24 @@ export async function startRaceGuideTracking(
     for (const loc of locations) {
       const accuracy = loc.coords.accuracy;
       const now = Date.now();
-      const stalled = now - lastAcceptedAt > STALL_TIMEOUT_MS;
+      const point: GeoPoint = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
 
+      // Der ALLERERSTE Punkt eines Laufs legt nur den Startpunkt fest und trägt
+      // selbst noch keine Distanz bei - wird deshalb IMMER akzeptiert, egal wie
+      // ungenau. Vorher hing auch er am FALLBACK_ACCURACY_M-Deckel (100m); bei
+      // echtem GPS-Kaltstart (Ungenauigkeit anfangs oft > 100m) wurde dadurch
+      // minutenlang gar kein Startpunkt akzeptiert und der Lauf zählte am Anfang
+      // keine Kilometer, obwohl schon gelaufen wurde (dasselbe Muster wie beim
+      // PaceForge-Kids-Gegenstück, GpsOutlierFilter.kt, 06.09.2026).
+      if (lastPoint == null) {
+        lastPoint = point;
+        lastAcceptedAt = now;
+        callbacks.onRawSample?.(accuracy, true);
+        callbacks.onDistanceUpdate(totalMeters);
+        continue;
+      }
+
+      const stalled = now - lastAcceptedAt > STALL_TIMEOUT_MS;
       if (accuracy != null && accuracy > MAX_ACCEPTABLE_ACCURACY_M) {
         const acceptAsFallback = stalled && accuracy <= FALLBACK_ACCURACY_M;
         if (!acceptAsFallback) {
@@ -84,10 +100,7 @@ export async function startRaceGuideTracking(
         console.warn(`[raceguide] Fallback: Punkt mit ${Math.round(accuracy)}m trotzdem angenommen (kein besserer seit ${STALL_TIMEOUT_MS}ms)`);
       }
 
-      const point: GeoPoint = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
-      if (lastPoint) {
-        totalMeters += haversineMeters(lastPoint, point);
-      }
+      totalMeters += haversineMeters(lastPoint, point);
       lastPoint = point;
       lastAcceptedAt = now;
       callbacks.onRawSample?.(accuracy, true);
