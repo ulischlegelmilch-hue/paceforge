@@ -16,7 +16,7 @@ export function fuelingPrepText(summary: FuelingSummary): string {
 }
 
 export function formatDistance(meters: number): string {
-  return meters >= 1000 ? `${(meters / 1000).toFixed(1).replace('.0', '')} km` : `${meters} m`;
+  return meters >= 1000 ? `${(meters / 1000).toFixed(1).replace('.0', '')} km` : `${Math.round(meters)} m`;
 }
 
 export function formatDuration(seconds: number): string {
