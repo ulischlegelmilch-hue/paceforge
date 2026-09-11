@@ -81,6 +81,10 @@ interface ProfileState {
   addActivity: (activity: CompletedActivity) => void;
   /** Wie addActivity, aber für mehrere auf einmal - überspringt bereits vorhandene IDs (z. B. Doppel-Abruf von Garmin). */
   addActivities: (activities: CompletedActivity[]) => void;
+  /** Ordnet eine Aktivität manuell einem ANDEREN Plan-Tag zu (z. B. ein Lauf, der ein
+   *  verpasstes Training vom Vortag nachholt) - überschreibt die automatische
+   *  Gleicher-Kalendertag-Zuordnung aus matchActivity/linkActivity. */
+  relinkActivity: (activityId: string, date: string) => void;
   /** Setzt den Status einer geplanten Einheit (z. B. manuell "erledigt" ohne FIT-Import, oder "skipped"). */
   setWorkoutStatus: (weekIndex: number, dayOfWeek: number, status: ScheduledWorkoutStatus) => void;
   /** Tauscht die Inhalte zweier Tage DERSELBEN Woche (Datum/Wochentag jedes Slots bleiben fix). */
@@ -215,6 +219,10 @@ export const useProfileStore = create<ProfileState>()(
       const fresh = newActivities.filter((a) => !existingIds.has(a.id)).map((a) => linkActivity(s.plan, a));
       return fresh.length > 0 ? { activities: [...s.activities, ...fresh] } : s;
     }),
+  relinkActivity: (activityId, date) =>
+    set((s) => ({
+      activities: s.activities.map((a) => (a.id === activityId ? { ...a, linkedScheduledWorkoutDate: date } : a)),
+    })),
   setWorkoutStatus: (weekIndex, dayOfWeek, status) =>
     set((s) => {
       if (!s.plan) return s;

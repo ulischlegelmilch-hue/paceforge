@@ -1,16 +1,26 @@
 import { useMemo } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { classifyFreeRun, coachCommentForActivity, compareWorkout, locateByDate, matchActivity, paceMpsToPerKm } from '@paceforge/core';
+import {
+  classifyFreeRun,
+  coachCommentForActivity,
+  compareWorkout,
+  locateByDate,
+  matchActivity,
+  paceMpsToPerKm,
+  ymdOf,
+} from '@paceforge/core';
 
 import { usePalette } from '@/ui/colors';
-import { title, heading, body, caption } from '@/ui/typography';
+import { title, heading, body, bodyStrong, caption } from '@/ui/typography';
 import { Card } from '@/ui/components/Card';
 import { Eyebrow } from '@/ui/components/Eyebrow';
 import { assessmentColor, assessmentLabel, formatDistance, formatDuration } from '@/ui/format';
 import { BarRow } from '@/ui/charts/BarRow';
 import { useProfileStore } from '@/store/profile';
+
+const MISSED_DAY_LOOKBACK_MS = 7 * 24 * 60 * 60 * 1000;
 
 // Umfangreiche Analyse EINER abgeleisteten Einheit: Plan-Vergleich (falls
 // verlinkt), sonst Zonen-Einordnung für freie Läufe, Höhenkorrektur, Runden.
@@ -22,6 +32,7 @@ export default function ActivityDetailScreen() {
   const profile = useProfileStore((s) => s.profile);
   const plan = useProfileStore((s) => s.plan);
   const activities = useProfileStore((s) => s.activities);
+  const relinkActivity = useProfileStore((s) => s.relinkActivity);
 
   const activity = activities.find((a) => a.id === params.id);
 
@@ -31,6 +42,35 @@ export default function ActivityDetailScreen() {
       ? locateByDate(plan, activity.linkedScheduledWorkoutDate)?.scheduled
       : matchActivity(plan, activity);
   }, [activity, plan]);
+
+  // Für "nachgeholtes Training": vergangene, nicht-Ruhe-Plantage der letzten
+  // Woche, die noch KEINER anderen Aktivität zugeordnet sind - Uli-Wunsch
+  // 11.09., ein an einem späteren Tag nachgeholtes Training einem verpassten
+  // Plantag zuordnen zu können (matchActivity/linkActivity matchen sonst nur
+  // exakt denselben Kalendertag, ein Nachholen an einem anderen Tag war bisher
+  // technisch nicht abbildbar).
+  const missedDays = useMemo(() => {
+    if (!plan || !activity) return [];
+    const ownDate = activity.linkedScheduledWorkoutDate ?? matchActivity(plan, activity)?.date;
+    const linkedElsewhere = new Set(
+      activities
+        .filter((a) => a.id !== activity.id)
+        .map((a) => a.linkedScheduledWorkoutDate ?? matchActivity(plan, a)?.date)
+        .filter((d): d is string => !!d),
+    );
+    const today = ymdOf(new Date());
+    const cutoff = ymdOf(new Date(Date.now() - MISSED_DAY_LOOKBACK_MS));
+    const out: { date: string; name: string }[] = [];
+    for (const week of plan.weeks) {
+      for (const sw of week.workouts) {
+        if (sw.workout.kind === 'rest') continue;
+        if (sw.date >= today || sw.date < cutoff) continue;
+        if (sw.date === ownDate || linkedElsewhere.has(sw.date)) continue;
+        out.push({ date: sw.date, name: sw.workout.name });
+      }
+    }
+    return out.sort((a, b) => b.date.localeCompare(a.date));
+  }, [plan, activities, activity]);
 
   const comparison = matched && activity ? compareWorkout(matched.workout, activity) : undefined;
   // Zonen-Einordnung IMMER berechnen (auch bei planmäßigen Läufen) - "wie hat
@@ -144,6 +184,32 @@ export default function ActivityDetailScreen() {
           </Card>
         )}
 
+        {missedDays.length > 0 && (
+          <Card style={styles.section}>
+            <Text style={[heading, { color: p.text }]}>Verpasstes Training nachholen?</Text>
+            <Text style={[body, { color: p.subtext, marginTop: 6, marginBottom: 10 }]}>
+              War dieser Lauf ein Nachholen eines verpassten Trainings? Dann diesem Tag zuordnen:
+            </Text>
+            <View style={{ gap: 8 }}>
+              {missedDays.map((d) => (
+                <Pressable
+                  key={d.date}
+                  onPress={() => activity && relinkActivity(activity.id, d.date)}
+                  style={({ pressed }) => [
+                    styles.missedDayRow,
+                    { backgroundColor: p.surfaceRaised, opacity: pressed ? 0.6 : 1 },
+                  ]}
+                >
+                  <Text style={[bodyStrong, { color: p.text }]}>
+                    {new Date(`${d.date}T00:00:00`).toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' })}
+                  </Text>
+                  <Text style={[caption, { color: p.subtext, marginTop: 2 }]}>{d.name}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </Card>
+        )}
+
         {(activity.totalAscentMeters || activity.gradeAdjustedDistanceMeters) && (
           <Card style={styles.section}>
             <Text style={[heading, { color: p.text }]}>Höhenprofil</Text>
@@ -195,4 +261,5 @@ const styles = StyleSheet.create({
   section: { marginBottom: 14 },
   rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   badge: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
+  missedDayRow: { borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10 },
 });
