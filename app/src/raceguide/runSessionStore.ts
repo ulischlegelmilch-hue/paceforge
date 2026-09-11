@@ -1,5 +1,11 @@
 import { create } from 'zustand';
-import { buildAnnouncementSchedule, type AnnouncementSlot, type PlanEvent } from '@paceforge/core';
+import {
+  buildAnnouncementSchedule,
+  paceMpsToPerKm,
+  type AnnouncementCategory,
+  type AnnouncementSlot,
+  type PlanEvent,
+} from '@paceforge/core';
 
 import { raceGuideAudioQueue } from './audioQueue';
 import {
@@ -32,6 +38,9 @@ interface RaceGuideState {
   lastAccuracyMeters: number | null;
   weakSignal: boolean;
   gpsDisabled: boolean;
+  /** Distanz/Laufzeit beim letzten Pace-Check (Basis für den nächsten km-Split, siehe checkPaceFeedback). */
+  lastPaceCheckMeters: number;
+  lastPaceCheckElapsedSeconds: number;
 
   start: (event: PlanEvent, estimatedTotalSeconds: number) => Promise<'ok' | 'permission-denied' | 'gps-disabled'>;
   pause: () => Promise<void>;
@@ -54,6 +63,8 @@ const initialSessionState = {
   lastAccuracyMeters: null as number | null,
   weakSignal: false,
   gpsDisabled: false,
+  lastPaceCheckMeters: 0,
+  lastPaceCheckElapsedSeconds: 0,
 };
 
 // Ab wie vielen HINTEREINANDER verworfenen Rohpunkten der "schwaches Signal"-
@@ -148,6 +159,8 @@ export const useRaceGuideStore = create<RaceGuideState>()((set, get) => ({
       lastAccuracyMeters: null,
       weakSignal: false,
       gpsDisabled: false,
+      lastPaceCheckMeters: 0,
+      lastPaceCheckElapsedSeconds: 0,
     });
     rejectStreak = 0;
 
@@ -192,6 +205,11 @@ export const useRaceGuideStore = create<RaceGuideState>()((set, get) => ({
   reset: () => set({ ...initialSessionState, firedSlotIds: new Set(), schedule: [] }),
 }));
 
+// Fortschritts-Kategorien, deren Aussagewert rein daran hängt, WELCHER
+// km-Stand aktuell ist - im Gegensatz zu einmaligen Ereignissen wie
+// Verpflegung/Zieleinlauf, die unabhängig von der km-Zahl gehört werden sollen.
+const PROGRESS_CATEGORIES: ReadonlySet<AnnouncementCategory> = new Set(['kmCovered', 'kmRemaining']);
+
 function handleDistanceUpdate(
   distanceMeters: number,
   set: (partial: Partial<RaceGuideState>) => void,
@@ -203,20 +221,96 @@ function handleDistanceUpdate(
   const firedSlotIds = new Set(state.firedSlotIds);
   let reachedFinish = false;
 
+  // Bei einem GPS-Nachzügler-Schub (Hintergrund-Task liefert nach schwachem
+  // Signal mehrere Punkte auf einmal, siehe locationTracker.ts) können in
+  // einem einzigen Aufruf mehrere km-Marken gleichzeitig überschritten werden.
+  // Würde man alle nacheinander in die Audio-Queue stellen, spricht der Guide
+  // "Kilometer 3! ... Kilometer 4!" noch, während die Anzeige längst weiter
+  // ist - genau das gefühlte "Ansage passt nicht zur Anzeige". Direkt
+  // aufeinanderfolgende km-Marken im selben Schub werden daher zusammengefasst:
+  // nur die zuletzt erreichte wird tatsächlich angesagt, die übersprungenen
+  // gelten trotzdem als gefeuert (kein nachträgliches "Kilometer 3" mehr).
+  const newlyCrossed: AnnouncementSlot[] = [];
   for (const slot of state.schedule) {
     if (firedSlotIds.has(slot.id)) continue;
     if (distanceMeters < slot.atDistanceMeters) continue;
     firedSlotIds.add(slot.id);
+    newlyCrossed.push(slot);
+  }
+
+  for (let i = 0; i < newlyCrossed.length; i++) {
+    const slot = newlyCrossed[i];
+    const next = newlyCrossed[i + 1];
+    if (PROGRESS_CATEGORIES.has(slot.category) && next && PROGRESS_CATEGORIES.has(next.category)) {
+      continue; // von einer späteren km-Marke im selben Schub überholt
+    }
     raceGuideAudioQueue.enqueue(resolveAnnouncement(slot.category, slot.km));
     if (slot.category === 'finish') reachedFinish = true;
   }
 
-  set({ distanceMeters, firedSlotIds });
+  const paceCheck = checkPaceFeedback(state, distanceMeters);
+
+  set({ distanceMeters, firedSlotIds, ...paceCheck });
   if (reachedFinish) {
     stopGpsWatchdog();
     void stopRaceGuideTracking();
     set({ status: 'finished' });
   }
+}
+
+/**
+ * Alle wie viele Meter Fortschritt (Distanz) UND aktuelle Pace angesagt werden
+ * (Uli-Wunsch 11.09.: "alle 500 Meter auf meinen Fortschritt hingewiesen" -
+ * vorher lag Pace bei 2 km, wodurch sie auf kürzeren Läufen nie fiel). An
+ * ganzen km-Marken (1000m, 2000m, ...) übernimmt der schon vorhandene
+ * kmCovered/kmRemaining-Ansagen-Schedule die Distanz (eigene, hübschere
+ * ElevenLabs-Stimme) - hier wird an diesen Marken NUR die Pace ergänzt, um
+ * keine Distanz doppelt anzusagen. An den dazwischenliegenden Halb-km-Marken
+ * (500m, 1500m, ...), für die es keine vorproduzierten Ansagen gibt, sagt
+ * dieser Check Distanz UND Pace zusammen per On-Device-TTS an.
+ */
+const PROGRESS_CHECK_INTERVAL_METERS = 500;
+
+/** "1234" -> "1,2" (deutsches Komma statt Punkt) fürs gesprochene Distanz-Fortschritt. */
+function formatKmForSpeech(meters: number): string {
+  return (meters / 1000).toFixed(1).replace('.', ',');
+}
+
+/**
+ * Prüft alle PROGRESS_CHECK_INTERVAL_METERS Meter die tatsächliche Pace seit
+ * dem letzten Check und sagt Fortschritt+Pace an. Läuft bewusst unabhängig vom
+ * Ansagen-Schedule (das kennt nur feste Distanz-Slots für kmCovered/
+ * kmRemaining/etc.), und wird bei schwachem GPS-Signal übersprungen - ein
+ * Nachzügler-Schub nach einem Signalloch würde sonst eine falsche, extreme
+ * Pace vortäuschen (dieselbe Ursache wie beim km-Ansage-Nachzügler-Fix oben).
+ */
+function checkPaceFeedback(
+  state: RaceGuideState,
+  distanceMeters: number,
+): Pick<RaceGuideState, 'lastPaceCheckMeters' | 'lastPaceCheckElapsedSeconds'> {
+  const noUpdate = { lastPaceCheckMeters: state.lastPaceCheckMeters, lastPaceCheckElapsedSeconds: state.lastPaceCheckElapsedSeconds };
+
+  const currentInterval = Math.floor(distanceMeters / PROGRESS_CHECK_INTERVAL_METERS);
+  const lastCheckedInterval = Math.floor(state.lastPaceCheckMeters / PROGRESS_CHECK_INTERVAL_METERS);
+  if (currentInterval <= lastCheckedInterval) return noUpdate;
+
+  const elapsedNow = currentElapsedSeconds(state);
+  const distanceDelta = distanceMeters - state.lastPaceCheckMeters;
+  const elapsedDelta = elapsedNow - state.lastPaceCheckElapsedSeconds;
+  const updated = { lastPaceCheckMeters: distanceMeters, lastPaceCheckElapsedSeconds: elapsedNow };
+  if (state.weakSignal || distanceDelta <= 0 || elapsedDelta <= 0) return updated;
+
+  const splitPaceMps = distanceDelta / elapsedDelta;
+  const paceText = `Aktuelle Pace: ${paceMpsToPerKm(splitPaceMps)} pro Kilometer.`;
+  const isWholeKmCheckpoint = currentInterval % 2 === 0;
+  raceGuideAudioQueue.enqueue({
+    id: 'progressCheck',
+    text: isWholeKmCheckpoint
+      ? paceText
+      : `Du hast jetzt ${formatKmForSpeech(currentInterval * PROGRESS_CHECK_INTERVAL_METERS)} Kilometer geschafft. ${paceText}`,
+  });
+
+  return updated;
 }
 
 /** Reine Hilfsfunktion für die UI: verstrichene Sekunden ohne eigenen Ticker im Store. */
