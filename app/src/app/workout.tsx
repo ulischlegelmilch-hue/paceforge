@@ -69,7 +69,10 @@ export default function WorkoutScreen() {
 
   const today = ymdOf(new Date());
   const isCurrentWeek = plan ? currentWeekIndex(plan, today) === week : false;
-  const canMove = isCurrentWeek && scheduledDate >= today;
+  // Quelle darf auch ein bereits vergangener Tag dieser Woche sein (z.B. eine
+  // verpasste Einheit auf einen noch kommenden Tag verschieben) - nur das Ziel
+  // muss >= today sein (siehe candidateDays), nicht die Quelle selbst.
+  const canMove = isCurrentWeek;
   const candidateDays = canMove ? (plan?.weeks[week]?.workouts.filter((wo) => wo.dayOfWeek !== day && wo.date >= today) ?? []) : [];
 
   function onSkipToggle() {
