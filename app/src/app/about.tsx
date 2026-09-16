@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as Updates from 'expo-updates';
 import {
   IRON_GUIDANCE,
   NUTRITION_DISCLAIMER,
@@ -81,6 +82,23 @@ export default function AboutScreen() {
             Workout-Arten erklärt ›
           </Text>
         </Pressable>
+
+        {/* Diagnose-Hilfe: verifiziert per Screenshot, ob ein OTA-Update wirklich
+            angekommen ist, statt das bei jedem "geht nicht" neu zu erraten. */}
+        <Section label="Update-Status">
+          <Text style={[caption, { color: p.subtext, marginTop: 6, lineHeight: 19 }]}>
+            Kanal: {Updates.channel ?? '(embedded, kein Kanal)'}
+          </Text>
+          <Text style={[caption, { color: p.subtext, marginTop: 4, lineHeight: 19 }]}>
+            Update-ID: {Updates.updateId ?? '(keins geladen)'}
+          </Text>
+          <Text style={[caption, { color: p.subtext, marginTop: 4, lineHeight: 19 }]}>
+            Runtime: {Updates.runtimeVersion ?? '?'}
+          </Text>
+          <Text style={[caption, { color: p.subtext, marginTop: 4, lineHeight: 19 }]}>
+            Quelle: {Updates.isEmbeddedLaunch ? 'eingebauter Build (kein OTA-Update geladen)' : 'OTA-Update geladen'}
+          </Text>
+        </Section>
       </ScrollView>
     </SafeAreaView>
   );
