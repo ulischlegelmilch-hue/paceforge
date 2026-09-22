@@ -1,7 +1,7 @@
 // Abgeschlossene Aktivität (Abschnitt 4). Quelle austauschbar: FIT-Import (MVP),
 // später API oder manuelle Eingabe.
 
-export type ActivitySource = 'fit-import' | 'api' | 'manual';
+export type ActivitySource = 'fit-import' | 'api' | 'manual' | 'app-tracked';
 
 export interface ActivityLap {
   distanceMeters: number;

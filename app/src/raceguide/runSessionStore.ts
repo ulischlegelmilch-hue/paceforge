@@ -4,6 +4,7 @@ import {
   paceMpsToPerKm,
   type AnnouncementCategory,
   type AnnouncementSlot,
+  type CompletedActivity,
   type PlanEvent,
 } from '@paceforge/core';
 
@@ -15,6 +16,7 @@ import {
   stopRaceGuideTracking,
 } from './locationTracker';
 import { resetPhraseResolver, resolveAnnouncement } from './phraseResolver';
+import { useProfileStore } from '@/store/profile';
 
 // Nicht-persistenter Session-Store für den laufenden Wettkampf-Audioguide (im
 // Gegensatz zu profile.ts, das dauerhaftes Profil/Plan/Aktivitäten hält) - eine
@@ -30,6 +32,8 @@ interface RaceGuideState {
   estimatedTotalSeconds: number;
   distanceMeters: number;
   startedAt: number | null;
+  /** Wanduhrzeit des allerersten Starts (im Ggs. zu `startedAt`, das bei jedem Resume überschrieben wird) - Basis für `CompletedActivity.startTime` beim Loggen. */
+  sessionStartedAt: number | null;
   pausedElapsedSeconds: number;
   schedule: AnnouncementSlot[];
   firedSlotIds: Set<string>;
@@ -55,6 +59,7 @@ const initialSessionState = {
   estimatedTotalSeconds: 0,
   distanceMeters: 0,
   startedAt: null as number | null,
+  sessionStartedAt: null as number | null,
   pausedElapsedSeconds: 0,
   schedule: [] as AnnouncementSlot[],
   firedSlotIds: new Set<string>(),
@@ -151,6 +156,7 @@ export const useRaceGuideStore = create<RaceGuideState>()((set, get) => ({
       estimatedTotalSeconds,
       distanceMeters: 0,
       startedAt: Date.now(),
+      sessionStartedAt: Date.now(),
       pausedElapsedSeconds: 0,
       schedule,
       firedSlotIds: new Set(),
@@ -199,6 +205,7 @@ export const useRaceGuideStore = create<RaceGuideState>()((set, get) => ({
     stopGpsWatchdog();
     await stopRaceGuideTracking();
     raceGuideAudioQueue.clear();
+    logSessionAsActivity(get());
     set({ status: 'idle' });
   },
 
@@ -254,6 +261,7 @@ function handleDistanceUpdate(
   if (reachedFinish) {
     stopGpsWatchdog();
     void stopRaceGuideTracking();
+    logSessionAsActivity({ ...get(), distanceMeters });
     set({ status: 'finished' });
   }
 }
@@ -319,4 +327,34 @@ export function currentElapsedSeconds(state: Pick<RaceGuideState, 'status' | 'st
     return state.pausedElapsedSeconds + (Date.now() - state.startedAt) / 1000;
   }
   return state.pausedElapsedSeconds;
+}
+
+// Kürzere Läufe/Abbrüche direkt nach dem Start nicht als Aktivität loggen -
+// sonst würde ein versehentlicher Start+Beenden-Tap einen Fake-Lauf erzeugen.
+const MIN_LOGGED_DISTANCE_METERS = 300;
+const MIN_LOGGED_DURATION_SECONDS = 60;
+
+/**
+ * Der Audioguide war bisher eine reine Live-Begleitung ohne eigene Aufzeichnung -
+ * beendete Sessions verschwanden spurlos, ohne je in `profile.ts`s `activities`
+ * zu landen. Dadurch hielt z.B. `assessDetraining` (Home-Warnung "seit X Tagen
+ * kein Lauf") jeden per Guide gelaufenen Lauf für nicht existent, sobald kein
+ * separater FIT-Import erfolgte. Root-Fix: Sessions loggen sich beim Beenden
+ * selbst als CompletedActivity (source 'app-tracked'), egal ob durch
+ * Zieleinlauf oder manuelles "Beenden".
+ */
+function logSessionAsActivity(state: RaceGuideState): void {
+  const elapsedSeconds = currentElapsedSeconds(state);
+  if (state.sessionStartedAt == null) return;
+  if (state.distanceMeters < MIN_LOGGED_DISTANCE_METERS || elapsedSeconds < MIN_LOGGED_DURATION_SECONDS) return;
+
+  const activity: CompletedActivity = {
+    id: `raceguide-${state.sessionStartedAt}`,
+    source: 'app-tracked',
+    startTime: new Date(state.sessionStartedAt).toISOString(),
+    totalDistanceMeters: state.distanceMeters,
+    totalDurationSeconds: Math.round(elapsedSeconds),
+    avgPaceMps: state.distanceMeters / elapsedSeconds,
+  };
+  useProfileStore.getState().addActivity(activity);
 }
