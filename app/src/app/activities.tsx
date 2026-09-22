@@ -6,6 +6,7 @@ import {
   assessReturnRamp,
   classifyFreeRun,
   compareWorkout,
+  isoDay,
   locateByDate,
   matchActivity,
   paceMpsToPerKm,
@@ -27,7 +28,9 @@ import { hasBackend } from '@/config';
 
 /** Datum des Wochenanfangs (lokal, `weekStartDay`-relativ), als 'YYYY-MM-DD'. */
 function startOfWeek(dateIso: string, weekStartDay: number): string {
-  const d = new Date(`${dateIso.slice(0, 10)}T12:00:00`);
+  // NICHT dateIso.slice(0, 10) - dateIso ist ein UTC-Zeitstempel (activity.startTime),
+  // ein früher Lauf verschiebt sich sonst bei Zeitzonen ≠ UTC auf den Vortag.
+  const d = new Date(`${isoDay(new Date(dateIso))}T12:00:00`);
   const dow = d.getDay();
   const diff = (dow - weekStartDay + 7) % 7;
   d.setDate(d.getDate() - diff);
@@ -61,7 +64,7 @@ function groupByWeek(activities: CompletedActivity[], weekStartDay: number, curr
     }
     group.totalDistanceMeters += a.totalDistanceMeters;
     group.activities.push(a);
-    const dow = new Date(`${a.startTime.slice(0, 10)}T12:00:00`).getDay();
+    const dow = new Date(`${isoDay(new Date(a.startTime))}T12:00:00`).getDay();
     group.dayHasRun[(dow - weekStartDay + 7) % 7] = true;
   }
   for (const g of map.values()) g.activities.sort((x, y) => y.startTime.localeCompare(x.startTime));

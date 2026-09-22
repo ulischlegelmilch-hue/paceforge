@@ -106,4 +106,13 @@ describe('groupActivitiesByEffectiveDate', () => {
     const map = groupActivitiesByEffectiveDate(null, [a]);
     expect(map.get('2026-02-01')).toEqual([a]);
   });
+
+  it('fällt beim Kalendertag-Fallback auf den LOKALEN Tag zurück, nicht den UTC-Tag (Root-Cause-Fix 22.09.)', () => {
+    // 23:30 UTC am 1.2. = 00:30 Uhr MEZ am 2.2. (Europe/Berlin) - außerhalb
+    // jedes Plans (kein Match möglich), der naive UTC-Tag wäre fälschlich der 1.2.
+    const a = activity({ id: 'a', startTime: '2026-02-01T23:30:00.000Z' });
+    const map = groupActivitiesByEffectiveDate(null, [a]);
+    expect(map.get('2026-02-02')).toEqual([a]);
+    expect(map.has('2026-02-01')).toBe(false);
+  });
 });

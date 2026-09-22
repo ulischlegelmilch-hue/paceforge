@@ -63,8 +63,13 @@ export function compareWorkout(planned: Workout, actual: CompletedActivity): Wor
   };
 }
 
+// WICHTIG: nicht iso.slice(0, 10) - CompletedActivity.startTime ist UTC (z.B.
+// vom Garmin-Import), ein früher Lauf (z.B. 00:30 Uhr MESZ) liegt in UTC noch
+// am Vortag. isoDay() wandelt erst in ein lokales Date um (Root-Cause-Fix
+// 22.09.2026, Uli-Meldung "Lauf vom 14. taucht nirgends auf" - er wurde durch
+// den naiven UTC-Schnitt fälschlich dem 13. zugeordnet).
 function ymd(iso: string): string {
-  return iso.slice(0, 10);
+  return isoDay(new Date(iso));
 }
 
 /** Ordnet eine Aktivität der geplanten (Nicht-Ruhe-)Einheit am selben Tag zu. */

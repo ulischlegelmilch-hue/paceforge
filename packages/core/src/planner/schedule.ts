@@ -1,6 +1,7 @@
 import type { CompletedActivity } from '../domain/activity';
 import type { PlanWeek, ScheduledWorkout, TrainingPlan } from '../domain/plan';
 import { matchActivity } from '../adaptation/adapt';
+import { isoDay } from '../util/date';
 
 // Datums-Navigation im Plan: „heute", „diese Woche", „nächste Einheiten".
 // Framework-agnostisch, damit die App (und Tests) dieselbe Logik nutzen.
@@ -60,7 +61,10 @@ export function groupActivitiesByEffectiveDate(
 ): Map<string, CompletedActivity[]> {
   const map = new Map<string, CompletedActivity[]>();
   for (const a of activities) {
-    const date = a.linkedScheduledWorkoutDate ?? (plan ? matchActivity(plan, a)?.date : undefined) ?? a.startTime.slice(0, 10);
+    // NICHT a.startTime.slice(0, 10) - siehe adapt.ts: UTC-Zeitstempel + früher
+    // Lauf verschiebt sich sonst bei Zeitzonen ≠ UTC auf den Vortag.
+    const date =
+      a.linkedScheduledWorkoutDate ?? (plan ? matchActivity(plan, a)?.date : undefined) ?? isoDay(new Date(a.startTime));
     const existing = map.get(date);
     if (existing) existing.push(a);
     else map.set(date, [a]);

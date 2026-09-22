@@ -80,6 +80,24 @@ describe('matchActivity', () => {
     const a = activity(sw.workout.estimatedDistanceMeters ?? 5000, 3.2, sw.date);
     expect(matchActivity(plan, a)?.date).toBe(sw.date);
   });
+
+  it('ordnet einen sehr frühen Lauf dem LOKALEN Kalendertag zu, nicht dem UTC-Tag (Root-Cause-Fix 22.09.)', () => {
+    // 00:30 Uhr lokal am Plantag liegt in UTC (Europe/Berlin, UTC+1/+2) noch am
+    // Vortag - der naive iso.slice(0, 10)-Schnitt würde das fälschlich auf den
+    // Vortag legen, statt es dem Plantag zuzuordnen.
+    const plan = generatePlan(profile(), { startDate: FIXED_START });
+    const sw = plan.weeks.flatMap((w) => w.workouts).find((s) => s.workout.kind !== 'rest')!;
+    const earlyLocal = new Date(new Date(`${sw.date}T00:00:00`).getTime() + 30 * 60_000);
+    const earlyLocalRun: CompletedActivity = {
+      id: 'a-early',
+      source: 'api',
+      startTime: earlyLocal.toISOString(),
+      totalDistanceMeters: sw.workout.estimatedDistanceMeters ?? 5000,
+      totalDurationSeconds: 1800,
+      avgPaceMps: 2.8,
+    };
+    expect(matchActivity(plan, earlyLocalRun)?.date).toBe(sw.date);
+  });
 });
 
 describe('suggestAdaptation', () => {

@@ -10,8 +10,10 @@ import { compareWorkout, type Assessment } from './adapt';
 // zusammen. Baut bewusst auf denselben Bausteinen wie suggestAdaptation() auf
 // (compareWorkout je Tag) statt eigene Vergleichslogik zu duplizieren.
 
+// Siehe adapt.ts: NICHT iso.slice(0, 10), sonst verschiebt ein früher Lauf
+// (UTC-Zeitstempel) sich bei Zeitzonen ≠ UTC auf den Vortag.
 function ymd(iso: string): string {
-  return iso.slice(0, 10);
+  return isoDay(new Date(iso));
 }
 
 export interface WeeklyEntry {
