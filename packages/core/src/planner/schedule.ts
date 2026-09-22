@@ -1,4 +1,6 @@
+import type { CompletedActivity } from '../domain/activity';
 import type { PlanWeek, ScheduledWorkout, TrainingPlan } from '../domain/plan';
+import { matchActivity } from '../adaptation/adapt';
 
 // Datums-Navigation im Plan: „heute", „diese Woche", „nächste Einheiten".
 // Framework-agnostisch, damit die App (und Tests) dieselbe Logik nutzen.
@@ -43,6 +45,27 @@ export function currentWeekIndex(plan: TrainingPlan, ymd: string): number {
 export function weekOf(plan: TrainingPlan, ymd: string): PlanWeek | undefined {
   const idx = currentWeekIndex(plan, ymd);
   return plan.weeks.find((w) => w.index === idx);
+}
+
+/**
+ * Ordnet jeder Aktivität ihr "effektives" Datum zu (verlinkter/gematchter Plan-Tag,
+ * sonst der eigene Kalendertag) und gruppiert nach Tag - mehrere Aktivitäten am
+ * selben Tag (z. B. ein nachgeholter verpasster Lauf + der eigentlich geplante)
+ * gehen dabei nicht verloren. Gemeinsame Basis für Plan-Ansicht und Kalender,
+ * damit "was ist an diesem Tag passiert" überall gleich berechnet wird.
+ */
+export function groupActivitiesByEffectiveDate(
+  plan: TrainingPlan | null | undefined,
+  activities: CompletedActivity[],
+): Map<string, CompletedActivity[]> {
+  const map = new Map<string, CompletedActivity[]>();
+  for (const a of activities) {
+    const date = a.linkedScheduledWorkoutDate ?? (plan ? matchActivity(plan, a)?.date : undefined) ?? a.startTime.slice(0, 10);
+    const existing = map.get(date);
+    if (existing) existing.push(a);
+    else map.set(date, [a]);
+  }
+  return map;
 }
 
 /** Die nächsten `count` Nicht-Ruhe-Einheiten ab dem Datum (einschließlich). */

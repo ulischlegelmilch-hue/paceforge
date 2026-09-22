@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   coachCommentForWeek,
   compareWorkout,
-  matchActivity,
+  groupActivitiesByEffectiveDate,
   strengthScheduleForWeek,
   weeklyAnalysis,
   weekOf,
@@ -17,6 +17,7 @@ import { usePalette } from '@/ui/colors';
 import { title, heading, body, bodyStrong, caption } from '@/ui/typography';
 import { Card } from '@/ui/components/Card';
 import { Button } from '@/ui/components/Button';
+import { HeaderIconButton } from '@/ui/components/HeaderIconButton';
 import { assessmentColor, assessmentLabel, DOW_SHORT, formatDistance, phaseColor, phaseLabel, workoutKindColor } from '@/ui/format';
 import { useProfileStore } from '@/store/profile';
 import { exportPlanIcs } from '@/delivery/exportPlanIcs';
@@ -32,26 +33,7 @@ export default function PlanScreen() {
   const [icsBusy, setIcsBusy] = useState(false);
   const today = ymdOf(new Date());
 
-  // Ordnet jeder Aktivität ihr "effektives" Datum zu (den verlinkten/gematchten
-  // Plan-Tag, sonst den eigenen Kalendertag) - für die Vergangenheits-Ansicht
-  // unten: dort zählt "was ist an diesem Tag wirklich passiert", nicht der
-  // ursprüngliche Plan-Eintrag (siehe activities.tsx für dasselbe Matching-Muster).
-  // Liste statt Einzel-Aktivität pro Datum: zwei Läufe am selben Tag (z.B. ein
-  // nachgeholter verpasster Lauf + der eigentlich für heute geplante) gingen
-  // vorher spurlos verloren, weil die zweite Aktivität die erste in der Map
-  // stillschweigend überschrieb (Uli-Meldung 11.09. "Trainings ... werden
-  // nicht hinzugefügt").
-  const activitiesByDate = useMemo(() => {
-    const map = new Map<string, CompletedActivity[]>();
-    if (!plan) return map;
-    for (const a of activities) {
-      const date = a.linkedScheduledWorkoutDate ?? matchActivity(plan, a)?.date ?? a.startTime.slice(0, 10);
-      const existing = map.get(date);
-      if (existing) existing.push(a);
-      else map.set(date, [a]);
-    }
-    return map;
-  }, [activities, plan]);
+  const activitiesByDate = useMemo(() => groupActivitiesByEffectiveDate(plan, activities), [activities, plan]);
 
   async function onExportIcs() {
     if (!plan) return;
@@ -78,25 +60,29 @@ export default function PlanScreen() {
 
   const currentWeekIndex = weekOf(plan, today)?.index;
 
+  function onMoreActions() {
+    Alert.alert('Mehr', undefined, [
+      { text: 'Workout-Arten erklärt', onPress: () => router.push('/glossary') },
+      { text: 'In Kalender exportieren (.ics)', onPress: onExportIcs },
+      { text: 'Wettkampf eintragen', onPress: () => router.push('/add-event') },
+      { text: 'Abbrechen', style: 'cancel' },
+    ]);
+  }
+
   return (
     <SafeAreaView style={[styles.fill, { backgroundColor: p.bg }]}>
       <View style={styles.header}>
-        <Text style={[title, { color: p.text }]}>Dein Trainingsplan</Text>
-        <Text style={[body, { color: p.subtext }]}>{plan.weeks.length} Wochen</Text>
-        <Pressable onPress={() => router.push('/activities')} hitSlop={6}>
-          <Text style={[caption, { color: p.text, marginTop: 8 }]}>Verlauf & Import ansehen ›</Text>
-        </Pressable>
-        <Pressable onPress={() => router.push('/glossary')} hitSlop={6}>
-          <Text style={[caption, { color: p.text, marginTop: 4 }]}>Workout-Arten erklärt ›</Text>
-        </Pressable>
-        <Pressable onPress={onExportIcs} disabled={icsBusy} hitSlop={6}>
-          <Text style={[caption, { color: p.text, marginTop: 4, opacity: icsBusy ? 0.5 : 1 }]}>
-            In Kalender exportieren (.ics) ›
-          </Text>
-        </Pressable>
-        <Pressable onPress={() => router.push('/add-event')} hitSlop={6}>
-          <Text style={[caption, { color: p.text, marginTop: 4 }]}>Wettkampf eintragen ›</Text>
-        </Pressable>
+        <View style={styles.headerTop}>
+          <View>
+            <Text style={[title, { color: p.text }]}>Dein Trainingsplan</Text>
+            <Text style={[body, { color: p.subtext }]}>{plan.weeks.length} Wochen</Text>
+          </View>
+          <View style={styles.headerActions}>
+            <HeaderIconButton icon="grid-outline" label="Kalender" onPress={() => router.push('/calendar')} />
+            <HeaderIconButton icon="time-outline" label="Verlauf" onPress={() => router.push('/activities')} />
+            <HeaderIconButton icon="ellipsis-horizontal" label="Mehr" onPress={onMoreActions} disabled={icsBusy} />
+          </View>
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll}>
@@ -236,6 +222,8 @@ export default function PlanScreen() {
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   header: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12 },
+  headerTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
+  headerActions: { flexDirection: 'row', gap: 4 },
   scroll: { padding: 20, paddingTop: 4, gap: 14 },
   weekHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   badge: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },

@@ -4,15 +4,18 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { usePalette } from '@/ui/colors';
-import { title, eyebrow, body, bodyStrong, caption } from '@/ui/typography';
+import { title, bodyStrong, caption } from '@/ui/typography';
 import { Card } from '@/ui/components/Card';
 import { Button } from '@/ui/components/Button';
+import { SettingsRow } from '@/ui/components/SettingsRow';
 import { useProfileStore } from '@/store/profile';
 import { hasBackend } from '@/config';
 import { pullSnapshot, pushSnapshot } from '@/api/sync';
 import { garminDisconnect, garminLogin, getGarminStatus, type GarminStatus } from '@/api/garmin';
 import { exportBackupJson, importBackupJson } from '@/delivery/exportBackup';
 import { getReminderPermissionStatus, scheduleUpcomingReminders } from '@/notifications/dailyReminder';
+
+type ExpandedSection = 'sync' | 'reminders' | 'garmin' | 'backup' | null;
 
 // Konsolidiert Cloud-Sync, Zurücksetzen und "Über & Quellen" – vorher lange
 // Einzel-Buttons am Ende der Home-Seite, jetzt über das Zahnrad im Header erreichbar.
@@ -37,6 +40,11 @@ export default function MoreScreen() {
 
   const [reminderStatus, setReminderStatus] = useState<'granted' | 'denied' | 'undetermined' | null>(null);
   const [reminderBusy, setReminderBusy] = useState(false);
+
+  // Immer nur ein Abschnitt gleichzeitig offen (Akkordeon) - hält die Liste
+  // kompakt, statt dass alle Formulare gleichzeitig sichtbar sind.
+  const [expanded, setExpanded] = useState<ExpandedSection>(null);
+  const toggle = (section: ExpandedSection) => setExpanded((s) => (s === section ? null : section));
 
   useEffect(() => {
     if (!hasBackend) return;
@@ -203,46 +211,56 @@ export default function MoreScreen() {
         <Text style={[title, { color: p.text }]}>Mehr</Text>
 
         {hasBackend && (
-          <Card>
-            <Text style={[eyebrow, { color: p.subtext }]}>Cloud-Sync</Text>
-            <Text style={[caption, { color: p.subtext, marginTop: 6 }]}>Gerät: {deviceId}</Text>
-            <Text style={[caption, { color: p.subtext, marginTop: 4, marginBottom: 12 }]}>
-              Läuft automatisch im Hintergrund bei Änderungen.{' '}
-              {lastSyncedAt
-                ? `Zuletzt gesichert: ${new Date(lastSyncedAt).toLocaleString('de-DE')}`
-                : 'Noch nicht gesichert'}
+          <SettingsRow
+            icon="cloud-outline"
+            title="Cloud-Sync"
+            subtitle={lastSyncedAt ? `Zuletzt gesichert: ${new Date(lastSyncedAt).toLocaleString('de-DE')}` : 'Noch nicht gesichert'}
+            expanded={expanded === 'sync'}
+            onToggle={() => toggle('sync')}
+          >
+            <Text style={[caption, { color: p.subtext, marginBottom: 12 }]}>
+              Gerät: {deviceId}. Läuft automatisch im Hintergrund bei Änderungen.
             </Text>
             <View style={styles.row}>
               <Button title="In Cloud sichern" onPress={() => void onSyncPush()} loading={syncBusy} style={styles.rowBtn} />
               <Button title="Aus Cloud laden" variant="secondary" onPress={onSyncPull} disabled={syncBusy} style={styles.rowBtn} />
             </View>
-          </Card>
+          </SettingsRow>
         )}
 
-        <Card>
-          <Text style={[eyebrow, { color: p.subtext }]}>Erinnerungen</Text>
-          <Text style={[caption, { color: p.subtext, marginTop: 6, marginBottom: 10 }]}>
+        <SettingsRow
+          icon="notifications-outline"
+          title="Erinnerungen"
+          subtitle={
+            reminderStatus === 'granted'
+              ? '✓ Aktiviert'
+              : reminderStatus === 'denied'
+                ? 'Abgelehnt – in Handy-Einstellungen erlauben'
+                : 'Noch nicht erlaubt'
+          }
+          expanded={expanded === 'reminders'}
+          onToggle={() => toggle('reminders')}
+        >
+          <Text style={[caption, { color: p.subtext, marginBottom: 12 }]}>
             Täglich um 6 Uhr eine Benachrichtigung, falls Training (Lauf oder Kraft) ansteht – läuft rein lokal auf
             dem Handy, braucht dafür kein Internet.
-          </Text>
-          <Text style={[bodyStrong, { color: p.text, marginBottom: 12 }]}>
-            {reminderStatus === 'granted'
-              ? '✓ Aktiviert.'
-              : reminderStatus === 'denied'
-                ? 'Abgelehnt – bitte in den Handy-Einstellungen für PaceForge erlauben.'
-                : 'Noch nicht erlaubt.'}
           </Text>
           {reminderStatus !== 'granted' && (
             <Button title="Erinnerungen erlauben" onPress={() => void onEnableReminders()} loading={reminderBusy} />
           )}
-        </Card>
+        </SettingsRow>
 
         {hasBackend && (
-          <Card>
-            <Text style={[eyebrow, { color: p.subtext }]}>Garmin Connect</Text>
+          <SettingsRow
+            icon="watch-outline"
+            title="Garmin Connect"
+            subtitle={garminStatus?.connected ? `Verbunden als ${garminStatus.username}` : 'Nicht verbunden'}
+            expanded={expanded === 'garmin'}
+            onToggle={() => toggle('garmin')}
+          >
             {garminStatus?.connected ? (
               <>
-                <Text style={[caption, { color: p.subtext, marginTop: 6, marginBottom: 12 }]}>
+                <Text style={[caption, { color: p.subtext, marginBottom: 12 }]}>
                   Verbunden als {garminStatus.username}
                   {garminStatus.connectedAt ? ` · seit ${new Date(garminStatus.connectedAt).toLocaleDateString('de-DE')}` : ''}
                 </Text>
@@ -250,7 +268,7 @@ export default function MoreScreen() {
               </>
             ) : (
               <>
-                <Text style={[caption, { color: p.subtext, marginTop: 6, marginBottom: 10 }]}>
+                <Text style={[caption, { color: p.subtext, marginBottom: 10 }]}>
                   Workouts direkt auf die Uhr übertragen (inoffizielle Anbindung – dein Passwort wird nicht
                   gespeichert, nur die Anmeldung selbst).
                 </Text>
@@ -274,12 +292,17 @@ export default function MoreScreen() {
                 <Button title="Verbinden" onPress={() => void onGarminConnect()} loading={garminBusy} />
               </>
             )}
-          </Card>
+          </SettingsRow>
         )}
 
-        <Card>
-          <Text style={[eyebrow, { color: p.subtext }]}>Lokale Sicherung</Text>
-          <Text style={[caption, { color: p.subtext, marginTop: 6, marginBottom: 12 }]}>
+        <SettingsRow
+          icon="save-outline"
+          title="Lokale Sicherung"
+          subtitle="Als Datei speichern oder laden"
+          expanded={expanded === 'backup'}
+          onToggle={() => toggle('backup')}
+        >
+          <Text style={[caption, { color: p.subtext, marginBottom: 12 }]}>
             Als Datei speichern (Drive, Mail, Dateien-App, ...) – unabhängig von der Cloud, z.B. falls die mal nicht
             erreichbar ist.
           </Text>
@@ -287,7 +310,7 @@ export default function MoreScreen() {
             <Button title="Als Datei sichern" onPress={() => void onExportBackup()} loading={backupBusy} style={styles.rowBtn} />
             <Button title="Aus Datei laden" variant="secondary" onPress={() => void onImportBackup()} disabled={backupBusy} style={styles.rowBtn} />
           </View>
-        </Card>
+        </SettingsRow>
 
         <Pressable onPress={() => router.push('/about')}>
           <Card style={styles.linkRow}>

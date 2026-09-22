@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import type { AthleteProfile } from '../src/domain/athlete';
+import type { CompletedActivity } from '../src/domain/activity';
 import { generatePlan } from '../src/planner/generatePlan';
 import {
   currentWeekIndex,
+  groupActivitiesByEffectiveDate,
   locateByDate,
   upcomingWorkouts,
   weekOf,
@@ -62,5 +64,46 @@ describe('upcomingWorkouts', () => {
     // chronologisch aufsteigend
     expect(next[0]!.scheduled.date <= next[1]!.scheduled.date).toBe(true);
     expect(next[1]!.scheduled.date <= next[2]!.scheduled.date).toBe(true);
+  });
+});
+
+describe('groupActivitiesByEffectiveDate', () => {
+  function activity(overrides: Partial<CompletedActivity>): CompletedActivity {
+    return {
+      id: 'act-1',
+      source: 'manual',
+      startTime: '2026-01-06T07:00:00.000Z',
+      totalDistanceMeters: 5000,
+      totalDurationSeconds: 1800,
+      avgPaceMps: 2.78,
+      ...overrides,
+    };
+  }
+
+  it('gruppiert nach explizit verlinktem Datum, wenn gesetzt', () => {
+    const a = activity({ id: 'a', linkedScheduledWorkoutDate: '2026-01-10' });
+    const map = groupActivitiesByEffectiveDate(plan, [a]);
+    expect(map.get('2026-01-10')).toEqual([a]);
+  });
+
+  it('fällt ohne Link auf das gematchte Plan-Datum, sonst den Kalendertag zurück', () => {
+    const matched = activity({ id: 'm', startTime: '2026-01-06T07:00:00.000Z' }); // trifft geplanten Tag
+    const unmatched = activity({ id: 'u', startTime: '2099-06-15T07:00:00.000Z' }); // außerhalb des Plans
+    const map = groupActivitiesByEffectiveDate(plan, [matched, unmatched]);
+    expect(map.get('2026-01-06')).toEqual([matched]);
+    expect(map.get('2099-06-15')).toEqual([unmatched]);
+  });
+
+  it('sammelt mehrere Aktivitäten am selben effektiven Tag statt eine zu überschreiben', () => {
+    const first = activity({ id: 'first', linkedScheduledWorkoutDate: '2026-01-08' });
+    const second = activity({ id: 'second', linkedScheduledWorkoutDate: '2026-01-08' });
+    const map = groupActivitiesByEffectiveDate(plan, [first, second]);
+    expect(map.get('2026-01-08')).toEqual([first, second]);
+  });
+
+  it('funktioniert ohne Plan (rein nach Kalendertag)', () => {
+    const a = activity({ id: 'a', startTime: '2026-02-01T07:00:00.000Z' });
+    const map = groupActivitiesByEffectiveDate(null, [a]);
+    expect(map.get('2026-02-01')).toEqual([a]);
   });
 });

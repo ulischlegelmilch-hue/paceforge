@@ -61,6 +61,7 @@ export default function RootLayout() {
         <Stack.Screen name="workout" />
         <Stack.Screen name="activities" />
         <Stack.Screen name="activity-detail" />
+        <Stack.Screen name="calendar" />
         <Stack.Screen name="weekly-review" />
         <Stack.Screen name="recalibrate" />
         <Stack.Screen name="strength" />

@@ -3,11 +3,9 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   assessDetraining,
-  classifyFreeRun,
   kindLabel,
   locateByDate,
   strengthOnDay,
-  strengthScheduleForWeek,
   weekOf,
   weeklyAnalysis,
   ymdOf,
@@ -63,9 +61,6 @@ export default function HomeScreen() {
   const spw = profile.strength?.sessionsPerWeek ?? 2;
   const todayDow = todayLoc?.scheduled.dayOfWeek ?? new Date().getDay();
   const todayStrength = thisWeek ? strengthOnDay(thisWeek, eq, spw, todayDow) : undefined;
-  const weekStrengthDays = thisWeek
-    ? new Set(strengthScheduleForWeek(thisWeek, eq, spw).map((s) => s.dayOfWeek))
-    : new Set<number>();
   const detraining = assessDetraining(activities);
   const detrainingColor = detraining?.level === 'warn' ? p.danger : p.warning;
 
@@ -75,25 +70,9 @@ export default function HomeScreen() {
   // mit - der Fortschrittsbalken darf dadurch über 100 % geplant hinausgehen,
   // gedeckelt auf 100 % Anzeige, mit eigenem Hinweis auf die Zusatzläufe.
   const weekAnalysis = plan ? weeklyAnalysis(plan, activities) : null;
-  const extraRuns = weekAnalysis?.extraActivities ?? [];
-  const weekDoneWithExtras = weekDone + extraRuns.length;
+  const extraRunsCount = weekAnalysis?.extraActivities.length ?? 0;
+  const weekDoneWithExtras = weekDone + extraRunsCount;
   const weekProgress = weekTraining.length > 0 ? Math.min(1, weekDoneWithExtras / weekTraining.length) : 0;
-  // Geplante + eigene Läufe dieser Woche chronologisch gemischt, damit ein
-  // spontaner Lauf am Ruhetag genauso sichtbar ist wie eine geplante Einheit.
-  type WeekRow =
-    | { kind: 'planned'; date: string; dayOfWeek: number; sw: (typeof weekTraining)[number] }
-    | { kind: 'free'; date: string; dayOfWeek: number; activity: (typeof extraRuns)[number] };
-  const weekRows: WeekRow[] = [
-    ...thisWeek?.workouts
-      .filter((w) => w.workout.kind !== 'rest')
-      .map((sw): WeekRow => ({ kind: 'planned', date: sw.date, dayOfWeek: sw.dayOfWeek, sw })) ?? [],
-    ...extraRuns.map((a): WeekRow => ({
-      kind: 'free',
-      date: a.startTime.slice(0, 10),
-      dayOfWeek: new Date(`${a.startTime.slice(0, 10)}T12:00:00`).getDay(),
-      activity: a,
-    })),
-  ].sort((a, b) => a.date.localeCompare(b.date));
 
   return (
     <SafeAreaView style={[styles.fill, { backgroundColor: p.bg }]}>
@@ -206,77 +185,19 @@ export default function HomeScreen() {
                 </View>
                 <Text style={[caption, { color: p.subtext }]}>
                   {weekDoneWithExtras}/{weekTraining.length} erledigt
-                  {extraRuns.length > 0 ? ` (+${extraRuns.length} eigene)` : ''}
+                  {extraRunsCount > 0 ? ` (+${extraRunsCount} eigene)` : ''}
                 </Text>
               </View>
             )}
-            {weekRows.map((row, i) => {
-              const rowStyle = [
-                styles.dayRow,
-                i > 0 && { borderTopWidth: 1, borderTopColor: p.border },
-              ];
-              if (row.kind === 'free') {
-                const zone = profile ? classifyFreeRun(row.activity, profile.currentVdot) : null;
-                return (
-                  <Pressable
-                    key={row.activity.id}
-                    onPress={() => router.push({ pathname: '/activity-detail', params: { id: row.activity.id } })}
-                    style={({ pressed }) => [...rowStyle, { opacity: pressed ? 0.6 : 1 }]}
-                  >
-                    <Text style={[caption, { width: 24, color: row.date === today ? p.accent : p.subtext, fontFamily: buttonType.fontFamily }]}>
-                      {DOW_SHORT[row.dayOfWeek]}
-                    </Text>
-                    <View style={[styles.kindDot, { backgroundColor: p.accent }]} />
-                    <Text style={[bodyStrong, { flex: 1, color: p.text }]} numberOfLines={1}>
-                      Eigener Lauf{zone ? ` · ${zone.zoneLabel}` : ''}
-                    </Text>
-                    <Text style={{ fontSize: 16, color: p.success }}>✓</Text>
-                  </Pressable>
-                );
-              }
-              const { sw } = row;
-              const isToday = sw.date === today;
-              const done = sw.status === 'completed';
-              const skipped = sw.status === 'skipped';
-              const moved = sw.status === 'modified';
-              return (
-                <Pressable
-                  key={sw.date}
-                  onPress={() =>
-                    router.push({
-                      pathname: '/workout',
-                      params: { week: thisWeek.index, day: sw.dayOfWeek },
-                    })
-                  }
-                  style={({ pressed }) => [...rowStyle, { opacity: pressed ? 0.6 : 1 }]}
-                >
-                  <Text style={[caption, { width: 24, color: isToday ? p.accent : p.subtext, fontFamily: buttonType.fontFamily }]}>
-                    {DOW_SHORT[sw.dayOfWeek]}
-                  </Text>
-                  <View style={[styles.kindDot, { backgroundColor: workoutKindColor(sw.workout.kind) }]} />
-                  {sw.workout.kind === 'race' ? (
-                    <Text style={{ fontSize: 14 }}>🏁</Text>
-                  ) : (
-                    moved && <Text style={[caption, { color: p.accent, fontFamily: buttonType.fontFamily }]}>↔</Text>
-                  )}
-                  <Text style={[bodyStrong, { flex: 1, color: p.text }, (done || skipped) && styles.strike]} numberOfLines={1}>
-                    {sw.workout.name}
-                  </Text>
-                  {weekStrengthDays.has(sw.dayOfWeek) && (
-                    <Text style={[styles.kraftTag, caption, { color: p.accent, borderColor: p.accent }]}>Kraft</Text>
-                  )}
-                  {done ? (
-                    <Text style={{ fontSize: 16, color: p.success }}>✓</Text>
-                  ) : skipped ? (
-                    <Text style={{ fontSize: 16, color: p.warning }}>✕</Text>
-                  ) : (
-                    <Text style={[caption, { color: p.subtext }]}>
-                      {formatDistance(sw.workout.estimatedDistanceMeters ?? 0)}
-                    </Text>
-                  )}
-                </Pressable>
-              );
-            })}
+            <Pressable
+              onPress={() => router.push('/calendar')}
+              hitSlop={6}
+              style={({ pressed }) => [styles.weekFooterLink, { borderTopColor: p.border, opacity: pressed ? 0.6 : 1 }]}
+            >
+              <Text style={[caption, { color: p.text, fontFamily: buttonType.fontFamily }]}>
+                Alle Tage & Verlauf im Kalender ansehen ›
+              </Text>
+            </Pressable>
           </Card>
         )}
 
@@ -314,11 +235,5 @@ const styles = StyleSheet.create({
   weekProgressRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12, marginBottom: 4 },
   weekProgressTrack: { flex: 1, height: 6, borderRadius: 3, overflow: 'hidden' },
   weekProgressFill: { height: 6, borderRadius: 3 },
-  dayRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 13 },
-  kindDot: { width: 8, height: 8, borderRadius: 4 },
-  kraftTag: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 7, paddingVertical: 2, overflow: 'hidden' },
-  zoneRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 13 },
-  tileGrid: { flexDirection: 'row', gap: 10 },
-  tile: { flex: 1, borderRadius: 20, paddingVertical: 18, alignItems: 'center', gap: 10 },
-  tileIconWrap: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  weekFooterLink: { marginTop: 14, paddingTop: 12, borderTopWidth: 1 },
 });
