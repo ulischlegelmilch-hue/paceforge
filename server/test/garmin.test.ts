@@ -341,6 +341,57 @@ describe('Garmin-Connect-Anbindung', () => {
     expect(body.activities.map((a) => a.id)).toEqual(['garmin-111']);
   });
 
+  it('inkrementeller Abruf mit sinceIso blättert weiter, falls ein Lauf hinter einer vollen ersten Seite liegt (Root-Cause-Fix 22.09.)', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/api/garmin/login',
+      payload: { deviceId: 'dev1', username: 'u', password: 'p' },
+    });
+    // 20 Nicht-Lauf-Aktivitäten füllen die erste Standard-Seite komplett -
+    // ohne Mehrseiten-Scan würde der dahinterliegende Lauf nie gesehen.
+    const filler = Array.from({ length: 20 }, (_, i) => ({
+      activityId: 900 + i,
+      startTimeGMT: `2026-09-${String((i % 19) + 1).padStart(2, '0')} 06:00:00`,
+      distance: 2000,
+      duration: 1200,
+      averageSpeed: 1.6,
+      activityType: { typeKey: 'walking' },
+    }));
+    const olderRun = runningActivity(500, '2026-08-25 06:00:00');
+    fakeClient.activitiesResponse = [...filler, olderRun];
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/garmin/activities?deviceId=dev1&sinceIso=2026-08-20T00:00:00.000Z',
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { activities: { id: string }[] };
+    expect(body.activities.map((a) => a.id)).toEqual(['garmin-500']);
+  });
+
+  it('ohne sinceIso bleibt es bei einer einzigen Seite (frisch verbunden, volle Historie läuft über Backfill)', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/api/garmin/login',
+      payload: { deviceId: 'dev1', username: 'u', password: 'p' },
+    });
+    const filler = Array.from({ length: 20 }, (_, i) => ({
+      activityId: 900 + i,
+      startTimeGMT: `2026-09-${String((i % 19) + 1).padStart(2, '0')} 06:00:00`,
+      distance: 2000,
+      duration: 1200,
+      averageSpeed: 1.6,
+      activityType: { typeKey: 'walking' },
+    }));
+    const olderRun = runningActivity(500, '2026-08-25 06:00:00');
+    fakeClient.activitiesResponse = [...filler, olderRun];
+
+    const res = await app.inject({ method: 'GET', url: '/api/garmin/activities?deviceId=dev1' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { activities: { id: string }[] };
+    expect(body.activities).toEqual([]);
+  });
+
   it('activities meldet Fehler von Garmin als 502', async () => {
     await app.inject({
       method: 'POST',

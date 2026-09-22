@@ -148,6 +148,46 @@ async function enrichWithFit(
   }
 }
 
+/**
+ * Blättert durch `getActivities()`-Seiten, bis eine kürzere/leere Seite kommt
+ * oder `maxPages` erreicht ist - Läufe-Filter (mapRunningActivities) läuft
+ * über ALLE gesammelten Rohaktivitäten, nicht nur die erste Seite.
+ *
+ * Root-Cause-Fix (22.09.2026, Uli-Meldung "Lauf vom 14. fehlt komplett"):
+ * der inkrementelle Abruf holte bisher IMMER nur eine einzige feste Seite
+ * (Standard 20 Rohaktivitäten) und filterte danach auf "Laufen". Hat ein
+ * Nutzer zwischen zwei Läufen andere Garmin-Aktivitäten (Spaziergänge,
+ * Kraft, ...), können dadurch ältere Läufe aus diesem Fenster rausfallen -
+ * und weil der Client-Cursor (garminLastPullAt) danach trotzdem auf die
+ * neueste ERFOLGREICH abgerufene Aktivität vorrückt, wurden sie bei JEDEM
+ * künftigen Abruf für immer übersprungen (sinceIso lag dann schon dahinter).
+ */
+async function fetchRunningActivitiesPaginated(
+  client: GarminConnectClient,
+  { pageSize, maxPages, startOffset = 0, sinceIso }: { pageSize: number; maxPages: number; startOffset?: number; sinceIso?: string },
+): Promise<{ pairs: { raw: GarminActivitySummary; mapped: MappedGarminActivity }[]; pagesFetched: number; partial: boolean }> {
+  const collected: { raw: GarminActivitySummary; mapped: MappedGarminActivity }[] = [];
+  let pagesFetched = 0;
+  let partial = false;
+  for (let page = 0; page < maxPages; page++) {
+    let raw: GarminActivitySummary[];
+    try {
+      raw = await client.getActivities(startOffset + page * pageSize, pageSize);
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error(`Garmin-Aktivitäten Seite ${page} fehlgeschlagen:`, e instanceof Error ? e.message : e);
+      if (page === 0) throw e;
+      partial = true;
+      break;
+    }
+    pagesFetched++;
+    if (raw.length === 0) break;
+    collected.push(...mapRunningActivities(raw, sinceIso));
+    if (raw.length < pageSize) break; // letzte Seite erreicht
+  }
+  return { pairs: collected, pagesFetched, partial };
+}
+
 /** Reichert die ersten `count` Aktivitäten (nach Sortierung, s. Aufrufer) an, Rest bleibt Summary-only. */
 async function maybeEnrich(
   client: GarminConnectClient,
@@ -369,8 +409,14 @@ export function registerGarmin(
 
       const pageSize = Math.max(1, Math.min(50, Number(limit) || 20));
       const pageOffset = Math.max(0, Number(offset) || 0);
-      const raw = await client.getActivities(pageOffset, pageSize);
-      const pairs = mapRunningActivities(raw, sinceIso);
+      // Mit Cursor (laufender Abruf seit dem letzten Mal) über mehrere Seiten
+      // scannen, damit dazwischenliegende Nicht-Lauf-Aktivitäten keine Läufe
+      // aus dem Fenster verdrängen (s. fetchRunningActivitiesPaginated). Ohne
+      // Cursor (frisch verbunden) reicht die eine angeforderte Seite - für
+      // die volle Historie gibt es extra /activities/backfill.
+      const { pairs } = sinceIso
+        ? await fetchRunningActivitiesPaginated(client, { pageSize, maxPages: 5, startOffset: pageOffset, sinceIso })
+        : { pairs: mapRunningActivities(await client.getActivities(pageOffset, pageSize), sinceIso) };
       const activities = enrich === 'true' ? await maybeEnrich(client, pairs, pairs.length) : pairs.map((x) => x.mapped);
 
       const freshTokens = client.exportToken();
@@ -417,25 +463,11 @@ export function registerGarmin(
       const client = await clientFactory();
       client.loadToken(tokens.oauth1, tokens.oauth2);
 
-      const collected: { raw: GarminActivitySummary; mapped: MappedGarminActivity }[] = [];
-      let pagesFetched = 0;
-      let partial = false;
-      for (let page = 0; page < maxPagesN; page++) {
-        let raw: GarminActivitySummary[];
-        try {
-          raw = await client.getActivities(page * pageSize, pageSize);
-        } catch (e) {
-          // eslint-disable-next-line no-console
-          console.error(`Garmin-Backfill Seite ${page} fehlgeschlagen:`, e instanceof Error ? e.message : e);
-          if (page === 0) throw e; // kompletter Fehlschlag -> 502 wie gewohnt
-          partial = true;
-          break;
-        }
-        pagesFetched++;
-        if (raw.length === 0) break;
-        collected.push(...mapRunningActivities(raw, sinceIso));
-        if (raw.length < pageSize) break; // letzte Seite erreicht
-      }
+      const { pairs: collected, pagesFetched, partial } = await fetchRunningActivitiesPaginated(client, {
+        pageSize,
+        maxPages: maxPagesN,
+        sinceIso,
+      });
 
       collected.sort((a, b) => b.mapped.startTime.localeCompare(a.mapped.startTime));
       const activities = await maybeEnrich(client, collected, enrichCount);
