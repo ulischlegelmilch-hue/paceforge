@@ -307,6 +307,40 @@ describe('Garmin-Connect-Anbindung', () => {
     expect(fakeClient.loadedTokens).toEqual({ oauth1: 'fake-oauth1', oauth2: 'fake-oauth2' });
   });
 
+  it('activities nimmt unbekannte typeKeys mit (z.B. Kurs-Navigation, Root-Cause-Fix 24.09.), verwirft aber bekannte andere Sportarten', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/api/garmin/login',
+      payload: { deviceId: 'dev1', username: 'u', password: 'p' },
+    });
+    fakeClient.activitiesResponse = [
+      {
+        activityId: 111,
+        startTimeGMT: '2026-09-14 06:30:00',
+        distance: 8123,
+        duration: 2460,
+        averageSpeed: 3.3,
+        // Garmin ordnet über eine Streckennavigation gestartete Läufe manchmal
+        // untypisch ein (Uli-Meldung: in der App als "Navigation" angezeigt,
+        // exakter typeKey unbekannt) - hier stellvertretend simuliert.
+        activityType: { typeKey: 'navigation' },
+      },
+      {
+        activityId: 222,
+        startTimeGMT: '2026-09-13 18:00:00',
+        distance: 15000,
+        duration: 2700,
+        averageSpeed: 5.5,
+        activityType: { typeKey: 'cycling' },
+      },
+    ];
+
+    const res = await app.inject({ method: 'GET', url: '/api/garmin/activities?deviceId=dev1' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { activities: { id: string }[] };
+    expect(body.activities.map((a) => a.id)).toEqual(['garmin-111']);
+  });
+
   it('activities mit sinceIso filtert bereits abgerufene Läufe raus', async () => {
     await app.inject({
       method: 'POST',

@@ -64,8 +64,38 @@ function parseGarminTimestamp(raw: string): string {
   return new Date(withZone).toISOString();
 }
 
+// Bekannte Garmin-typeKeys anderer Sportarten - bewusst eine DENY- statt
+// ALLOW-Liste (Root-Cause-Fix 24.09.2026, Uli-Meldung: ein Lauf entlang einer
+// vorab geplanten Strecke wurde in Garmin Connect als "Navigation" statt
+// "Laufen" eingeordnet, obwohl Distanz/Pace/Puls echte Laufdaten waren - der
+// exakte typeKey dafür ist nicht bekannt/dokumentiert). Ein reines
+// `includes('running')` verwirft dadurch jede Aktivität mit einem
+// untypischen/unbekannten typeKey, selbst wenn sie tatsächlich ein Lauf war.
+// Jeder typeKey, der NICHT in dieser Liste bekannter anderer Sportarten steht,
+// gilt jetzt als laufkompatibel.
+const NON_RUNNING_TYPE_KEYS = new Set([
+  'cycling', 'road_biking', 'mountain_biking', 'gravel_cycling', 'cyclocross',
+  'track_cycling', 'indoor_cycling', 'virtual_ride', 'e_biking', 'e_bike_mountain',
+  'swimming', 'open_water_swimming', 'lap_swimming',
+  'walking', 'casual_walking', 'speed_walking',
+  'hiking',
+  'strength_training', 'cardio_training', 'yoga', 'pilates', 'fitness_equipment',
+  'indoor_cardio', 'breathwork', 'meditation',
+  'elliptical', 'stair_climbing', 'rowing', 'indoor_rowing', 'stand_up_paddleboarding',
+  'skiing', 'resort_skiing', 'backcountry_skiing', 'cross_country_skiing',
+  'snowboarding', 'skating', 'ice_skating',
+  'mountaineering', 'climbing', 'bouldering', 'indoor_climbing',
+  'boxing', 'martial_arts', 'racket_sports', 'tennis', 'golf', 'team_sports',
+  'soccer', 'basketball', 'american_football', 'volleyball',
+  'water_sports', 'diving', 'fishing', 'hunting', 'driving', 'flying', 'motorsports',
+  'wheelchair_push_walk',
+]);
+
 function isRunningActivity(a: GarminActivitySummary): boolean {
-  return (a.activityType?.typeKey ?? '').toLowerCase().includes('running');
+  const typeKey = (a.activityType?.typeKey ?? '').toLowerCase();
+  if (!typeKey) return false;
+  if (typeKey.includes('running')) return true;
+  return !NON_RUNNING_TYPE_KEYS.has(typeKey);
 }
 
 // Bildet Garmins Aktivitäts-JSON auf das geräteunabhängige CompletedActivity-
